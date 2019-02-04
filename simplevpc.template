@@ -1,0 +1,277 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "vpc0a998481b5b05f3bt": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "172.18.1.0/24",
+                "InstanceTenancy": "default",
+                "EnableDnsSupport": "true",
+                "EnableDnsHostnames": "true",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "VPC-NC-aroon-DR"
+                    }
+                ]
+            }
+           },
+        "subnet0717aecb40b2d2e2b": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.18.1.0/27",
+                "AvailabilityZone": "us-west-1a",
+                "VpcId": {
+                    "Ref": "vpc0a998481b5b05f3bt"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SN-NC-aroon-PUBLIC1-DR"
+                    }
+                ]
+            }
+          },
+        "subnet004833177b371f418": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.18.1.32/27",
+                "AvailabilityZone": "us-west-1b",
+                "VpcId": {
+                    "Ref": "vpc0a998481b5b05f3bt"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SN-NC-aroon-PUBLIC2-DR"
+                    }
+                ]
+            }
+          },
+        "igw045bc5883704c4cee": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "IGW-NC-aroon-DR"
+                    }
+                ]
+            }
+           },
+        "dopt5104c228": {
+            "Type": "AWS::EC2::DHCPOptions",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "DOC-NC-aroon-DR"
+                    }
+                ],
+                "DomainName": "ec2.internal",
+                "DomainNameServers": [
+                    "AmazonProvidedDNS"
+                ]
+            }
+          },
+        "acl044403dce6b58b4f7": {
+            "Type": "AWS::EC2::NetworkAcl",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpc0a998481b5b05f3bt"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "NCL-NC-aroon-DR"
+                    }
+                ]
+            }
+           },
+        "rtb0ea54bb79d5c9c1c2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpc0a998481b5b05f3bt"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "RT-NC-aroon-DEFAULT-PUBLIC-DR"
+                    }
+                ]
+            }
+          },
+        "rtb065094dc633909b23": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpc0a998481b5b05f3bt"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "RT-NC-aroon-PUBLIC-DR"
+                    }
+                ]
+            }
+           },
+        "sgSGNCTESTSS2VPNDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-aroon-VPN-DR",
+                "VpcId": {
+                    "Ref": "vpc0a998481b5b05f3bt"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-aroon-VPN-DR"
+                    }
+                ]
+            }
+           },
+        "acl1": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Egress": "true",
+                "Protocol": "-1",
+                "RuleAction": "allow",
+                "RuleNumber": "100",
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                }
+            }
+           },
+        "acl2": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Protocol": "-1",
+                "RuleAction": "allow",
+                "RuleNumber": "100",
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                }
+            }
+           },
+          "rtb050ee7e6af58c2f9e": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpc0a998481b5b05f3bt"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "RT-NC-aroon-PRIVATE-ZAB-DR"
+                    }
+                ]
+            }
+           },
+ 
+        "subnetacl1": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                },
+                "SubnetId": {
+                    "Ref": "subnet0717aecb40b2d2e2b"
+                }
+            }
+           },
+        "subnetacl2": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                },
+                "SubnetId": {
+                    "Ref": "subnet004833177b371f418"
+                }
+            }
+           },
+        "gw1": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpc0a998481b5b05f3bt"
+                },
+                "InternetGatewayId": {
+                    "Ref": "igw045bc5883704c4cee"
+                }
+            }
+           },
+        "subnetroute1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "rtb050ee7e6af58c2f9e"
+                },
+                "SubnetId": {
+                    "Ref": "subnet004833177b371f418"
+                }
+            }
+           },
+        "subnetroute2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "rtb065094dc633909b23"
+                },
+                "SubnetId": {
+                    "Ref": "subnet0717aecb40b2d2e2b"
+                }
+            }
+           },
+        "route1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "RouteTableId": {
+                    "Ref": "rtb050ee7e6af58c2f9e"
+                },
+                "GatewayId": {
+                    "Ref": "igw045bc5883704c4cee"
+                }
+            },
+            "DependsOn": "gw1"
+        },
+        "dchpassoc1": {
+            "Type": "AWS::EC2::VPCDHCPOptionsAssociation",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpc0a998481b5b05f3bt"
+                },
+                "DhcpOptionsId": {
+                    "Ref": "dopt5104c228"
+                }
+            }
+          },
+        "ingress1": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "80",
+                "ToPort": "80",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "egress1": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        }
+     }           
+}
+
