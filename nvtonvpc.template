@@ -1,0 +1,1626 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "vpcnc": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "172.18.1.0/24",
+                "InstanceTenancy": "default",
+                "EnableDnsSupport": "true",
+                "EnableDnsHostnames": "true",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "VPC-NC-TEST-SS2-DR"
+                    }
+                ]
+            }
+          },
+        "subpub1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.18.1.0/27",
+                "AvailabilityZone": "us-west-1a",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SN-NC-TEST-SS2-PUBLIC1-DR"
+                    }
+                ]
+            }
+           },
+        "subpub2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.18.1.32/27",
+                "AvailabilityZone": "us-west-1b",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SN-NC-TEST-SS2-PUBLIC2-DR"
+                    }
+                ]
+            }
+           },
+        "subpri1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.18.1.64/27",
+                "AvailabilityZone": "us-west-1a",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SN-NC-TEST-SS2-APP-PRIVATE1-DR"
+                    }
+                ]
+            }
+           },
+       "subpri2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.18.1.96/27",
+                "AvailabilityZone": "us-west-1b",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SN-NC-TEST-SS2-APP-PRIVATE2-DR"
+                    }
+                ]
+        } 
+       },
+        "subdb1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.18.1.192/27",
+                "AvailabilityZone": "us-west-1b",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SN-NC-TEST-SS2-DB-PRIVATE1-DR"
+                    }
+                ]
+            }
+          },
+       "subdb2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.18.1.160/27",
+                "AvailabilityZone": "us-west-1a",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SN-NC-TEST-SS2-DB-PRIVATE2-DR"
+                    }
+                ]
+            }
+          },
+        "subzab": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.18.1.224/27",
+                "AvailabilityZone": "us-west-1a",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SN-NC-TEST-ZAB-DR"
+                    }
+                ]
+            }
+           },
+        "igw": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "IGW-NC-TEST-SS2-DR"
+                    }
+                ]
+            }
+           
+        },
+
+        "eip1" : {
+              "DependsOn" : "gw1",
+              "Type" : "AWS::EC2::EIP",
+              "Properties" : {
+              "Domain" : "vpc"
+                }
+              },
+
+
+        
+        
+        "ngw1" : {
+             "DependsOn" : "gw1",
+             "Type" : "AWS::EC2::NatGateway",
+             "Properties" : {
+             "AllocationId" : {"Fn::GetAtt" : ["eip1", "AllocationId"]},
+             "SubnetId" : {"Ref" : "subpub1"},
+             "Tags" : [ {"Key" : "Name", "Value" : "NGW-CN-SS2-TEST1" } ] 
+            }
+           },
+
+             "eip2" : {
+              "DependsOn" : "gw1",
+              "Type" : "AWS::EC2::EIP",
+              "Properties" : {
+              "Domain" : "vpc"
+                }
+              },
+
+
+
+
+
+             "ngw2" : {
+             "DependsOn" : "gw1",
+             "Type" : "AWS::EC2::NatGateway",
+             "Properties" : {
+             "AllocationId" : {"Fn::GetAtt" : ["eip2", "AllocationId"]},
+             "SubnetId" : { "Ref" : "subpub2"},
+             "Tags" : [ {"Key" : "Name", "Value" : "NGW-CN-SS2-TEST2" } ]
+              }
+            },
+
+
+
+
+
+        "cgw009eb11a940c137a1": {
+            "Type": "AWS::EC2::CustomerGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "CGW-NC-TEST-SS2-DR"
+                    }
+                ],
+                "Type": "ipsec.1",
+                "IpAddress": "<puturiphere>",
+                "BgpAsn": "65000"
+            }
+           },
+        "vgw0273af9eb4d1406a9": {
+            "Type": "AWS::EC2::VPNGateway",
+            "Properties": {
+                "Type": "ipsec.1",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "VPG-NC-TEST-SS2-DR"
+                    }
+                ]
+           }  
+          },
+        "dopt5104c228": {
+            "Type": "AWS::EC2::DHCPOptions",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "DOC-NC-TEST-SS2-DR"
+                    }
+                ],
+                "DomainName": "ec2.internal",
+                "DomainNameServers": [
+                    "AmazonProvidedDNS"
+                ]
+            }
+          },
+        "vpn009358d058137f291": {
+            "Type": "AWS::EC2::VPNConnection",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "VPN-NC-SS2-TEST-DR"
+                    }
+                ],
+                "Type": "ipsec.1",
+                "StaticRoutesOnly": "true",
+                "VpnGatewayId": {
+                    "Ref": "vgw0273af9eb4d1406a9"
+                },
+                "CustomerGatewayId": {
+                    "Ref": "cgw009eb11a940c137a1"
+                }
+            }
+           },
+        "acl02e82dc9d77e13f4f": {
+            "Type": "AWS::EC2::NetworkAcl",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "NCL-NC-TEST-SS2-DB"
+                    }
+                ]
+            }
+           },
+        "acl044403dce6b58b4f7": {
+            "Type": "AWS::EC2::NetworkAcl",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "NCL-NC-TEST-SS2-DR"
+                    }
+                ]
+            }
+            },
+        "rtbzab": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "RT-NC-TEST-SS2-PRIVATE-ZAB-DR"
+                    }
+                ]
+            }
+          },
+        "rtbpub": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "RT-NC-TEST-SS2-PUBLIC-DR"
+                    }
+                ]
+            }
+           },
+        "rtbpri1": {
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+             "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "RT-NC-TEST-SS2-APP-PRIVATE-DR"
+                    }
+                ]
+            }
+          },
+     
+
+
+        "rtbpri2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "RT-NC-TEST-SS2-APP-PRIVATE-DR"
+                    }
+                ]
+            }
+          },
+        "rtbdb": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "RT-NC-TEST-SS2-DB-PRIVATE-DR"
+                    }
+                ]
+            }
+           },
+        "dbsubnetdbsngnvtestss2new": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "This DB subnet for SS2 TEST enviroment",
+                "SubnetIds": [
+                    {
+                        "Ref": "subdb1"
+                    },
+                    {
+                        "Ref": "subdb2"
+                    }
+                ]
+            }
+          },
+        "dbpgss2dbnvtestpg": {
+            "Type": "AWS::RDS::DBParameterGroup",
+            "Properties": {
+                "Description": "Custom DB Param Group",
+                "Family": "aurora-mysql5.7",
+                "Parameters": {
+                    "aurora_lab_mode": "0",
+                    "binlog_cache_size": "32768",
+                    "default_tmp_storage_engine": "InnoDB",
+                    "explicit_defaults_for_timestamp": "1",
+                    "general_log": "1",
+                    "innodb_adaptive_hash_index": "0",
+                    "innodb_buffer_pool_size": "{DBInstanceClassMemory*3/4}",
+                    "innodb_flush_method": "O_DIRECT"
+                }
+            }
+           },
+        "sgSGNCTESTSS2VPNDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-VPN-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-VPN-DR"
+                    }
+                ]
+            }
+           },
+        "sgSGNCTESTSS2APPDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-APP-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-APP-DR"
+                    }
+                ]
+            }
+           },
+        "sgSGNCTESTSS2ZABWEB": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-ZAB-WEB",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-ZAB-WEB"
+                    }
+                ]
+            }
+           },
+        "sgSGNCTESTSS2ELBDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-ELB-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-ELB-DR"
+                    }
+                ]
+            }
+           },
+        "sgSGNCTESTSS2UTILITYDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-UTILITY-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-UTILITY-DR"
+                    }
+                ]
+            }
+          },
+        "sgSGNCTESTSS2SOLRDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-SOLR-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-SOLR-DR"
+                    }
+                ]
+            }
+          },
+        "sgSGNCTESTSS2ZABDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-ZAB-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-ZAB-DR"
+                    }
+                ]
+            }
+           },
+        "sgSGNCTESTSS2DR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-DR"
+                    }
+                ]
+            }
+           },
+        "sgSGNCSSTESTTWILLIO": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-SS-TEST-TWILLIO",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                  },
+                "Tags": [
+                 {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-TWILLIO"
+                    }
+                ]
+             }
+            },
+
+        "sgSGNCTESTSS2DOIDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-DOI-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-DOI-DR"
+                    }
+                ]
+            }
+           },
+        "sgSGNCTESTSS2EFSDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-EFS-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-EFS-DR"
+                    }
+                ]
+            }
+           },
+        "sgSGNCTESTSS2DBDR": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SG-NC-TEST-SS2-DB-DR",
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "SG-NC-TEST-SS2-DB-DR"
+                    }
+                ]
+            }
+           },
+        "acl1": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Egress": "true",
+                "Protocol": "-1",
+                "RuleAction": "allow",
+                "RuleNumber": "100",
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                }
+            }
+          },
+        "acl2": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Protocol": "-1",
+                "RuleAction": "allow",
+                "RuleNumber": "100",
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                }
+            }
+          },
+        "subnetacl1": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                },
+                "SubnetId": {
+                    "Ref": "subpub1"
+                }
+            }
+          },
+        "subnetacl2": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                },
+                "SubnetId": {
+                    "Ref": "subzab"
+                }
+            }
+           },
+        "subnetacl3": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                },
+                "SubnetId": {
+                    "Ref": "subpri2"
+                }
+            }
+         },
+        "subnetacl4": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                },
+                "SubnetId": {
+                    "Ref": "subdb2"
+                }
+            }
+          },
+        "subnetacl5": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                },
+                "SubnetId": {
+                    "Ref": "subpub2"
+                }
+            }
+          },
+        "subnetacl6": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                },
+                "SubnetId": {
+                    "Ref": "subdb1"
+                }
+            }
+          },
+        "subnetacl7": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "acl044403dce6b58b4f7"
+                },
+                "SubnetId": {
+                    "Ref": "subpri1"
+                }
+            }
+          },
+        "gw1": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "igw"
+                }
+            }
+           },
+        "gw2": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "VpnGatewayId": {
+                    "Ref": "vgw0273af9eb4d1406a9"
+                }
+            }
+           },
+         
+
+
+        "subnetroute1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "rtbzab"
+                },
+                "SubnetId": {
+                    "Ref": "subzab"
+                }
+            }
+           },
+        "subnetroute3": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "rtbpub"
+                },
+                "SubnetId": {
+                    "Ref": "subpub1"
+                }
+            }
+           },
+        "subnetroute4": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "rtbpub"
+                },
+                "SubnetId": {
+                    "Ref": "subpub2"
+                }
+            }
+           },
+        "subnetroute5": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "rtbpri2"
+                },
+                "SubnetId": {
+                    "Ref": "subpri2"
+                }
+            }
+           },
+        "subnetroute6": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "rtbpri1"
+                },
+                "SubnetId": {
+                    "Ref": "subpri1"
+                }
+            }
+          },
+        "subnetroute7": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "rtbdb"
+                },
+                "SubnetId": {
+                    "Ref": "subdb2"
+                }
+            }
+           },
+        "subnetroute8": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "rtbdb"
+                },
+                "SubnetId": {
+                    "Ref": "subdb1"
+                }
+            }
+           },
+        "route2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "RouteTableId": {
+                    "Ref": "rtbzab"
+                },
+                "GatewayId": {
+                    "Ref": "igw"
+                }
+            },
+            "DependsOn": "gw1"
+        },
+        "route3": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "10.1.4.0/24",
+                "RouteTableId": {
+                    "Ref": "rtbzab"
+                },
+                "GatewayId": {
+                    "Ref": "vgw0273af9eb4d1406a9"
+                }
+            },
+            "DependsOn": "gw2"
+          },  
+        "route4": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "192.168.0.0/16",
+                "RouteTableId": {
+                    "Ref": "rtbzab"
+                },
+                "GatewayId": {
+                    "Ref": "vgw0273af9eb4d1406a9"
+                }
+            },
+            "DependsOn": "gw2"
+          },
+        "route6": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "RouteTableId": {
+                    "Ref": "rtbpub"
+                },
+                "GatewayId": {
+                    "Ref": "igw"
+                }
+            },
+            "DependsOn": "gw1"
+         },
+        "route7": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "RouteTableId": {
+                    "Ref": "rtbpri2"
+                
+            },
+            "NatGatewayId": {
+                    "Ref": "ngw2"
+                }
+            }
+           },
+        "route8": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "10.1.4.0/24",
+                "RouteTableId": {
+                    "Ref": "rtbpri2"
+                },
+                "GatewayId": {
+                    "Ref": "vgw0273af9eb4d1406a9"
+                }
+            }
+          },
+        "route9": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "192.168.0.0/16",
+                "RouteTableId": {
+                    "Ref": "rtbpri2"
+                },
+                "GatewayId": {
+                    "Ref": "vgw0273af9eb4d1406a9"
+                }
+            }
+          },
+        "route10": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "RouteTableId": {
+                    "Ref": "rtbpri1"
+
+            },
+            "NatGatewayId": {
+                    "Ref": "ngw1"
+                }
+            }
+          },
+        "route11": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "10.1.4.0/24",
+                "RouteTableId": {
+                    "Ref": "rtbpri1"
+                },
+                "GatewayId": {
+                    "Ref": "vgw0273af9eb4d1406a9"
+                }
+            }
+          },
+        "route12": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "DestinationCidrBlock": "192.168.0.0/16",
+                "RouteTableId": {
+                    "Ref": "rtbpri1"
+                },
+                "GatewayId": {
+                    "Ref": "vgw0273af9eb4d1406a9"
+                }
+            }
+           },
+
+        "dchpassoc1": {
+            "Type": "AWS::EC2::VPCDHCPOptionsAssociation",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "vpcnc"
+                },
+                "DhcpOptionsId": {
+                    "Ref": "dopt5104c228"
+                }
+            }
+           },
+        "ingress1": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "80",
+                "ToPort": "80",
+                "CidrIp": "172.27.224.0/24"
+            }
+        },
+        "ingress2": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "80",
+                "ToPort": "80",
+                "CidrIp": "172.27.232.0/24"
+            }
+        },
+        "ingress3": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "22",
+                "ToPort": "22",
+                "CidrIp": "172.27.224.0/24"
+            }
+        },
+        "ingress4": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "22",
+                "ToPort": "22",
+                "CidrIp": "172.27.232.0/24"
+            }
+        },
+        "ingress5": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "943",
+                "ToPort": "943",
+                "CidrIp": "172.27.224.0/24"
+            }
+        },
+        "ingress6": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "943",
+                "ToPort": "943",
+                "CidrIp": "172.27.232.0/24"
+            }
+        },
+        "ingress7": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "udp",
+                "FromPort": "12615",
+                "ToPort": "12615",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "ingress8": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "172.27.224.0/24"
+            }
+        },
+        "ingress9": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "172.27.232.0/24"
+            }
+        },
+        "ingress10": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "122.162.86.16/32"
+            }
+        },
+        "ingress11": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "182.156.234.106/32"
+            }
+        },
+        "ingress12": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2APPDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "80",
+                "ToPort": "80",
+                "SourceSecurityGroupId": {
+                    "Ref": "sgSGNCTESTSS2ELBDR"
+                },
+                "SourceSecurityGroupOwnerId": "329912760137"
+            }
+           },
+        "ingress13": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2APPDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "80",
+                "ToPort": "80",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress14": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2APPDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "0",
+                "ToPort": "65535",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress15": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2APPDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "SourceSecurityGroupId": {
+                    "Ref": "sgSGNCTESTSS2ELBDR"
+                },
+                "SourceSecurityGroupOwnerId": "329912760137"
+            }
+          },
+        "ingress16": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2APPDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress17": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABWEB"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "80",
+                "ToPort": "80",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress18": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABWEB"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "0",
+                "ToPort": "65535",
+                "CidrIp": "172.18.1.93/32"
+            }
+        },
+        "ingress19": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABWEB"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "22",
+                "ToPort": "22",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress20": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABWEB"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "42000",
+                "ToPort": "42004",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress21": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABWEB"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "182.156.234.106/32"
+            }
+        },
+        "ingress22": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABWEB"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "122.176.45.206/32"
+            }
+        },
+        "ingress23": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABWEB"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress24": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABWEB"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "103.235.167.241/32"
+            }
+        },
+        "ingress25": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ELBDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "80",
+                "ToPort": "80",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "ingress26": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ELBDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "ingress27": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2UTILITYDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "8080",
+                "ToPort": "8080",
+                "SourceSecurityGroupId": {
+                    "Ref": "sgSGNCTESTSS2DR"
+                },
+                "SourceSecurityGroupOwnerId": "329912760137"
+            }
+         },
+        "ingress28": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2UTILITYDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "11211",
+                "ToPort": "11211",
+                "SourceSecurityGroupId": {
+                    "Ref": "sgSGNCTESTSS2DR"
+                },
+                "SourceSecurityGroupOwnerId": "329912760137"
+            }
+           },
+        "ingress30": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2SOLRDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "8080",
+                "ToPort": "8080",
+                "SourceSecurityGroupId": {
+                    "Ref": "sgSGNCTESTSS2DR"
+                },
+                "SourceSecurityGroupOwnerId": "329912760137"
+            }
+           },
+        "ingress31": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "10050",
+                "ToPort": "10052",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress32": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "10050",
+                "ToPort": "10052",
+                "CidrIp": "10.93.24.0/24"
+            }
+        },
+        "ingress33": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "22",
+                "ToPort": "22",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress34": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "CidrIp": "10.93.24.0/24"
+            }
+        },
+        "ingress35": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2DR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "80",
+                "ToPort": "80",
+                "SourceSecurityGroupId": {
+                    "Ref": "sgSGNCTESTSS2ELBDR"
+                },
+                "SourceSecurityGroupOwnerId": "329912760137"
+            }
+          },
+        "ingress36": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2DR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "443",
+                "ToPort": "443",
+                "SourceSecurityGroupId": {
+                    "Ref": "sgSGNCTESTSS2ELBDR"
+                },
+                "SourceSecurityGroupOwnerId": "329912760137"
+            }
+           },
+        "ingress37": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCSSTESTTWILLIO"
+                },
+                "IpProtocol": "udp",
+                "FromPort": "10000",
+                "ToPort": "20000",
+                "CidrIp": "54.172.60.0/23"
+            }
+        },
+        "ingress38": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCSSTESTTWILLIO"
+                },
+                "IpProtocol": "udp",
+                "FromPort": "10000",
+                "ToPort": "20000",
+                "CidrIp": "34.203.250.0/23"
+            }
+        },
+        "ingress39": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCSSTESTTWILLIO"
+                },
+                "IpProtocol": "udp",
+                "FromPort": "5060",
+                "ToPort": "5060",
+                "CidrIp": "54.172.60.0/32"
+            }
+        },
+        "ingress40": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCSSTESTTWILLIO"
+                },
+                "IpProtocol": "udp",
+                "FromPort": "5060",
+                "ToPort": "5060",
+                "CidrIp": "54.172.60.1/32"
+            }
+        },
+        "ingress41": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCSSTESTTWILLIO"
+                },
+                "IpProtocol": "udp",
+                "FromPort": "5060",
+                "ToPort": "5060",
+                "CidrIp": "54.172.60.2/32"
+            }
+        },
+        "ingress42": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCSSTESTTWILLIO"
+                },
+                "IpProtocol": "udp",
+                "FromPort": "5060",
+                "ToPort": "5060",
+                "CidrIp": "54.172.60.3/32"
+            }
+        },
+        "ingress43": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2EFSDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "0",
+                "ToPort": "65535",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress44": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2DBDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "3306",
+                "ToPort": "3306",
+                "SourceSecurityGroupId": {
+                    "Ref": "sgSGNCTESTSS2DR"
+                },
+                "SourceSecurityGroupOwnerId": "329912760137"
+            }
+         },
+        "ingress45": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2DBDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "3306",
+                "ToPort": "3306",
+                "SourceSecurityGroupId": {
+                    "Ref": "sgSGNCTESTSS2DOIDR"
+                },
+                "SourceSecurityGroupOwnerId": "329912760137"
+            }
+         },
+        "ingress46": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2DBDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "3306",
+                "ToPort": "3306",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "ingress47": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2DBDR"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": "6033",
+                "ToPort": "6033",
+                "CidrIp": "172.18.1.0/24"
+            }
+        },
+        "egress1": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2VPNDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress2": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2APPDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress3": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABWEB"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress4": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ELBDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress5": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2UTILITYDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress7": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2SOLRDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress8": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2ZABDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress9": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2DR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress10": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCSSTESTTWILLIO"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress11": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2DOIDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress12": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2EFSDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "egress13": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "sgSGNCTESTSS2DBDR"
+                },
+                "IpProtocol": "-1",
+                "CidrIp": "0.0.0.0/0"
+            }
+        },
+        "croute1": {
+            "Type": "AWS::EC2::VPNConnectionRoute",
+            "Properties": {
+                "VpnConnectionId": {
+                    "Ref": "vpn009358d058137f291"
+                },
+                "DestinationCidrBlock": "192.168.0.0/16"
+
+            }
+  
+            },
+        "croute2": {
+            "Type": "AWS::EC2::VPNConnectionRoute",
+            "Properties": {
+                "VpnConnectionId": {
+                    "Ref": "vpn009358d058137f291"
+                },
+                "DestinationCidrBlock": "10.1.4.0/24"
+              }
+          }                 
+     }           
+   }
