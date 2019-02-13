@@ -1,2 +1,2 @@
 # cloudfronttemplates
-Collection of CloudFront Templates Created by me
+Collection of CloudFormation Templates Created by me
