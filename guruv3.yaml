@@ -249,10 +249,10 @@ Parameters:
 
   DatabaseBackupRetentionPeriod:
     ConstraintDescription: Database backup retention period must be between 1 and 35 days
-    Default: '0'
+    Default: '1'
     Description: The number of days for which automatic DB snapshots are retained
-    MaxValue: '8'
-    MinValue: '0'
+    MaxValue: '35'
+    MinValue: '1'
     Type: Number
 
   DatabaseAllocatedStorage:
