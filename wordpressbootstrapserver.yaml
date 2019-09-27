@@ -7,7 +7,10 @@ Parameters:
   ExportStackName:
           Description: The name of the stack that exports the values
           Type: String  
-
+          
+  ElasticFileSystem:                                                                            
+  Description:  EFS filesystem id from vpcinfra stack                                   
+  Type: String 
 
 
 #Web Server Parameters
@@ -267,7 +270,7 @@ Resources:
                 mkdir -p /var/www 
             02_mount:
               command:  
-                mount -t efs ${ElasticFileSystem}:/ /var/www
+               !Sub  mount -t efs ${ElasticFileSystem}:/ /var/www
             
         install_cfn:
           files:
@@ -395,6 +398,20 @@ Resources:
         - Fn::ImportValue: !Sub '${ExportStackName}-WebServerSecurityGroup'
       KeyName: 
         Fn::ImportValue: !Sub '${ExportStackName}-EC2KeyName'
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              yum update -y aws-cfn-bootstrap
+            - '/opt/aws/bin/cfn-init -v '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource LaunchConfig '
+            - '         --configsets wordpress_install '
+            - '         --region '
+            - !Ref 'AWS::Region'  
  
 
 #
