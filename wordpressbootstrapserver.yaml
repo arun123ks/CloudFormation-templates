@@ -182,7 +182,8 @@ Resources:
       MaxSize: 1
       DesiredCapacity: 1
       TargetGroupARNs:
-        Fn::ImportValue: !Sub '${ExportStackName}-ALBTargetGroup'
+        - Fn::ImportValue: !Sub '${ExportStackName}-ALBTargetGroup'
+        - Fn::ImportValue: !Sub '${ExportStackName}-ALBTargetGroupssl'
       NotificationConfiguration:
         TopicARN: 
           Fn::ImportValue: !Sub '${ExportStackName}-NotificationTopic'
@@ -266,7 +267,7 @@ Resources:
                 mkdir -p /var/www 
             02_mount:
               command:  
-                mount -t efs ${!ImportValue !Sub '${ExportStackName}-ElasticFileSystem'}:/ /var/www
+                mount -t efs ${ElasticFileSystem}:/ /var/www
             
         install_cfn:
           files:
@@ -323,6 +324,7 @@ Resources:
               php70-mysqlnd: []
               mysql56: []
               httpd24: []
+              mod24_ssl: []
           sources:
             /var/www: 'http://wordpress.org/latest.tar.gz'
           files:
@@ -357,6 +359,16 @@ Resources:
             01_configure_wordpress:
               command: /tmp/create-wp-config
               cwd: /var/www/wordpress
+            02_configure_ssl:
+              command:  
+                cd /etc/pki/tls/certs
+            03_configue_ssl:
+              command:
+                /bin/bash make-dummy-cert localhost.crt
+            04_configure_ssl:
+              command:
+                sed -i s/SSLCertificateKeyFile/\#SSLCertificateKeyFile/g /etc/httpd/conf.d/ssl.conf    
+
           services:
             sysvinit:
               httpd:
@@ -380,7 +392,7 @@ Resources:
           - Arch
       InstanceType: !Ref InstanceType
       SecurityGroups:
-        [Fn::ImportValue: !Sub '${ExportStackName}-WebServerSecurityGroup']
+        - Fn::ImportValue: !Sub '${ExportStackName}-WebServerSecurityGroup'
       KeyName: 
         Fn::ImportValue: !Sub '${ExportStackName}-EC2KeyName'
  
