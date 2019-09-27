@@ -876,7 +876,7 @@ Resources:
         - CertificateArn: !Ref AlbAcmCertificate
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
+          TargetGroupArn: !Ref ALBTargetGroupssl
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: '443'
       Protocol: HTTPS
@@ -896,7 +896,7 @@ Resources:
   ALBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
-      HealthCheckPath: /wordpress/wp-admin/install.php
+      HealthCheckPath: /
       HealthCheckIntervalSeconds: 10
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
@@ -912,6 +912,24 @@ Resources:
         - Key: stickiness.lb_cookie.duration_seconds
           Value: '5'
 
+  ALBTargetGroupssl:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Port: 443
+      Protocol: HTTPS
+      UnhealthyThresholdCount: 5
+      VpcId: !Ref VPC
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '5'
 
 #SNS Resources
   NotificationTopic:
@@ -1083,6 +1101,12 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-ALBTargetGroup      
   
+  ALBTargetGroupssl:
+    Description: Webserver target group
+    Value: !Ref ALBTargetGroupssl
+    Export:
+      Name: !Sub ${AWS::StackName}-ALBTargetGroupssl 
+
 #SNS 
   NotificationTopic:
     Description: Notification Topic
