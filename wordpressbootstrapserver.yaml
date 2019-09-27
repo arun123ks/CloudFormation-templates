@@ -7,10 +7,10 @@ Parameters:
   ExportStackName:
           Description: The name of the stack that exports the values
           Type: String  
-          
+
   ElasticFileSystem:                                                                            
-  Description:  EFS filesystem id from vpcinfra stack                                   
-  Type: String 
+    Description:  EFS filesystem id from vpcinfra stack                                   
+    Type: String 
 
 
 #Web Server Parameters
