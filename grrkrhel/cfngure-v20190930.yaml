@@ -1,0 +1,2413 @@
+AWSTemplateFormatVersion: 2010-09-09 
+Description:   
+  This template creates stack based on AWS bestest practice.
+
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+#Environment Label
+      - 
+        Label: 
+          default: "AWS Environment"
+        Parameters: 
+          - EnvironmentName
+          - OperatorEMail
+          - AcmCertificate
+#VPC Label
+      - 
+        Label: 
+          default: "VPC CIDR"
+        Parameters: 
+          - VpcCIDR
+      - 
+        Label: 
+          default: "Subnet CIDR"
+        Parameters:
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+          - PrivateSubnetDB1CIDR
+          - PrivateSubnetDB2CIDR
+      - 
+        Label: 
+          default: "SSH CIDR"
+        Parameters: 
+          - SSHLocation
+
+#Bastion Label
+      - 
+        Label: 
+          default: "VPN Server  Parameters"
+        Parameters:
+          - VPNInstanceType
+          - EC2KeyName
+
+#RDS Label      
+      - 
+        Label: 
+          default: "Databae Parameters"
+        Parameters:
+          - DatabaseName1
+          - DatabaseUser
+          - DatabasePassword
+          - DatabaseBackupRetentionPeriod
+          - DatabaseAllocatedStorage
+          - DatabaseInstanceClass
+          - MultiAZDatabase
+
+#Web Server Label
+      - 
+        Label: 
+          default: "Web Server Parameters"
+        Parameters:
+          - InstanceType
+          - WebAsgMax
+          - WebAsgMin
+          - WebServerCapacity
+
+#S3
+      - 
+        Label: 
+          default: "S3 Parameters"
+        Parameters:
+          - BucketName
+          
+        
+#WAF
+
+
+      - 
+        Label:
+          default: Resource Prefix
+        Parameters:
+          - stackPrefix
+      - 
+        Label:
+          default: WAF Implementation
+        Parameters:
+          - stackScope
+          - ruleAction
+      - 
+        Label:
+          default: Generic HTTP Request Enforcement
+        Parameters:
+          - maxExpectedURISize
+          - maxExpectedQueryStringSize
+          - maxExpectedBodySize
+          - maxExpectedCookieSize
+      - 
+        Label:
+          default: Administrative Interface
+        Parameters:
+          - adminUrlPrefix
+          - adminRemoteCidr
+      - 
+        Label:
+          default: Cross-Site Request Forgery (CSRF)
+        Parameters:
+          - csrfExpectedHeader
+          - csrfExpectedSize
+      - 
+        Label:
+          default: Application Specific
+        Parameters:
+          - includesPrefix
+    ParameterLabels:
+      stackPrefix:
+        default: Resource Name Prefix
+      stackScope:
+        default: Apply to WAF
+      ruleAction:
+        default: Rule Effect
+      includesPrefix:
+        default: Server-side components URI prefix
+      adminUrlPrefix:
+        default: URI prefix
+      adminRemoteCidr:
+        default: Allowed IP source (CIDR)
+      maxExpectedURISize:
+        default: Max. size of URI
+      maxExpectedQueryStringSize:
+        default: Max. size of QUERY STRING
+      maxExpectedBodySize:
+        default: Max. size of BODY
+      maxExpectedCookieSize:
+        default: Max. size of COOKIE
+      csrfExpectedHeader:
+        default: HTTP Request Header
+      csrfExpectedSize:
+        default: Token Size
+
+
+Parameters:
+#Environment Parameters
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+    
+  OperatorEMail:
+    Description: EMail address to notify if there are any scaling operations
+    Type: String
+    AllowedPattern: >-
+      ([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)
+    ConstraintDescription: must be a valid email address.
+
+  AcmCertificate:
+    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
+    Description: '[ Optional ] The AWS Certification Manager certificate ARN for the ALB certificate - this certificate should be created in the region you wish to run the ALB and must reference the domain name you use below.'
+    Type: String
+
+#VPC Parameters
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.0.0.0/24
+
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.0.1.0/24
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private webserver subnet in the first Availability Zone
+    Type: String
+    Default: 10.0.2.0/24
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private webserver subnet in the second Availability Zone
+    Type: String
+    Default: 10.0.3.0/24
+
+  PrivateSubnetDB1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private database subnet in the first Availability Zone
+    Type: String
+    Default: 10.0.4.0/24
+
+  PrivateSubnetDB2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private database subnet in the second Availability Zone
+    Type: String
+    Default: 10.0.5.0/24
+    
+  SSHLocation:
+    Description: ' The IP address range that can be used to access the web server using SSH.'
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    
+#Bastion Parameters
+  VPNInstanceType:
+    Description: Amazon EC2 instance type for the bastion instances
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.medium
+     
+    ConstraintDescription: Must be a valid EC2 instance type.
+
+  EC2KeyName:
+    Description: Name of an EC2 KeyPair to enable SSH access to the instance.
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+
+  VPNAMIID:
+    Description: AMI ID of VPN Instane, please eneter Pritunl AMI ID.
+    Type: String
+    ConstraintDescription: Must be the ID of an existing AMI.
+  
+  APP1AMIID:
+    Description: AMI ID of APP1 Instane, please enter App1 AMI ID.
+    Type: String
+    ConstraintDescription: Must be the ID of an existing AMI. 
+
+  APP2AMIID:
+    Description: AMI ID of APP2 Instane, please enter App2 AMI ID.
+    Type: String
+    ConstraintDescription: Must be the ID of an existing AMI. 
+
+#RDS Parameters
+  DatabaseName1:
+    Description:  database name
+    Default: myDatabase
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DatabaseUser:
+    Description: Username for PostgreSQL database access never use admin username here
+    NoEcho: 'true'
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DatabasePassword:
+    Description: Password for PostgreSQL database access
+    NoEcho: 'true'
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+
+  DatabaseBackupRetentionPeriod:
+    ConstraintDescription: Database backup retention period must be between 1 and 35 days
+    Default: '1'
+    Description: The number of days for which automatic DB snapshots are retained
+    MaxValue: '35'
+    MinValue: '1'
+    Type: Number
+
+  DatabaseAllocatedStorage:
+    Description: The size of the database (Gb)
+    Default: '5'
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 5 and 1024Gb.
+
+  DatabaseInstanceClass:
+    Description: The database instance type
+    Type: String
+    Default: db.t3.medium
+    AllowedValues:
+      - db.t3.medium
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4large
+      - db.r5.12xlarge
+      - db.r5.24xlarge
+  
+    ConstraintDescription: must select a valid database instance type.
+
+  MultiAZDatabase:
+    Description: Create a Multi-AZ PostgreSQL Amazon RDS database instance
+    Default: 'false'
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    ConstraintDescription: must be either true or false.
+
+#S3 IAM parameter
+
+
+#Web Server Parameters
+  InstanceType:
+    Description: WebServers EC2 instance type
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.medium
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.8xlarge
+      - m5.12xlarge
+      - m5.16xlarge
+ 
+    ConstraintDescription: Must be a valid EC2 instance type.
+
+  WebAsgMax:
+    AllowedPattern: ^((?!0$)[1-2]?[0-9]|30)$
+    ConstraintDescription: Must be a number between 1 and 30.
+    Default: 4
+    Description: Specifies the maximum number of EC2 instances in the Web Autoscaling Group.
+    Type: String
+
+  WebAsgMin:
+    AllowedPattern: ^([0-0]?[0-9]|10)$
+    ConstraintDescription: Must be a number between 0 and 10.
+    Default: 2
+    Description: Specifies the minimum number of EC2 instances in the Web Autoscaling Group.
+    Type: String
+
+  WebServerCapacity:
+    Description: The initial number of WebServer instances
+    Default: '2'
+    Type: Number
+    ConstraintDescription: must be between 2 and 4 EC2 instances.
+
+#S3
+  BucketName:
+    Description: The name of bucket where course files are stored
+    Type: String
+    Default: appbuckettomcat
+
+
+
+
+
+#WAF Parameters 
+
+
+  stackPrefix:
+    Type: String
+    Description: The prefix to use when naming resources in this stack. Normally we would use the stack name, but since this template can be used as a resource in other stacks we want to keep the naming consistent. No symbols allowed.
+    ConstraintDescription: Alphanumeric characters only, maximum 10 characters
+    AllowedPattern: ^[a-zA-z0-9]+$
+    MaxLength: 10
+    Default: generic
+  stackScope:
+    Type: String
+    Description: You can deploy this stack at a regional level, for regional WAF targets like Application Load Balancers, or for global targets, such as Amazon CloudFront distributions.
+    AllowedValues:
+      - Global
+      - Regional
+    Default: Regional
+  ruleAction:
+    Type: String
+    Description: The type of action you want to iplement for the rules in this set. Valid options are COUNT or BLOCK.
+    AllowedValues:
+      - BLOCK
+      - COUNT
+    Default: BLOCK
+  includesPrefix:
+    Type: String
+    Description: This is the URI path prefix (starting with '/') that identifies any files in your webroot that are server-side included components, and should not be invoked directly via URL. These can be headers, footers, 3rd party server side libraries or components. You can add additional prefixes later directly in the set.
+    Default: /includes
+  adminUrlPrefix:
+    Type: String
+    Description: This is the URI path prefix (starting with '/') that identifies your administrative sub-site. You can add additional prefixes later directly in the set.
+    Default: /admin
+  adminRemoteCidr:
+    Type: String
+    Description: This is the IP address allowed to access your administrative interface. Use CIDR notation. You can add additional ones later directly in the set.
+    Default: 127.0.0.1/32
+  maxExpectedURISize:
+    Type: Number
+    Description: Maximum number of bytes allowed in the URI component of the HTTP request. Generally the maximum possible value is determined by the server operating system (maps to file system paths), the web server software, or other middleware components. Choose a value that accomodates the largest URI segment you use in practice in your web application.
+    Default: 512
+  maxExpectedQueryStringSize:
+    Type: Number
+    Description: Maximum number of bytes allowed in the query string component of the HTTP request. Normally the  of query string parameters following the "?" in a URL is much larger than the URI , but still bounded by the  of the parameters your web application uses and their values.
+    Default: 1024
+  maxExpectedBodySize:
+    Type: Number
+    Description: Maximum number of bytes allowed in the body of the request. If you do not plan to allow large uploads, set it to the largest payload value that makes sense for your web application. Accepting unnecessarily large values can cause performance issues, if large payloads are used as an attack vector against your web application.
+    Default: 4096
+  maxExpectedCookieSize:
+    Type: Number
+    Description: Maximum number of bytes allowed in the cookie header. The maximum size should be less than 4096, the size is determined by the amount of information your web application stores in cookies. If you only pass a session token via cookies, set the size to no larger than the serialized size of the session token and cookie metadata.
+    Default: 4093
+  csrfExpectedHeader:
+    Type: String
+    Description: The custom HTTP request header, where the CSRF token value is expected to be encountered
+    Default: x-csrf-token
+  csrfExpectedSize:
+    Type: Number
+    Description: The size in bytes of the CSRF token value. For example if it's a canonically formatted UUIDv4 value the expected size would be 36 bytes/ASCII characters
+    Default: 36
+
+
+# WAF logging
+
+  KinesisBufferIntervalSeconds: 
+    Default: 900
+    Description: The frequency of data delivery to Amazon S3 is determined by the Amazon S3 Buffer size and Buffer interval value that you configured for your delivery stream. Kinesis Data Firehose buffers incoming data before delivering it to Amazon S3. You can configure the values for Amazon S3 Buffer size (1-128 MB) or Buffer interval (60 – 900 seconds), and the condition satisfied first triggers data delivery to Amazon S3    
+    Type: Number
+    MinValue: 60
+    MaxValue: 900
+  KinesisBufferSizeMB: 
+    Default: 3
+    Description: The frequency of data delivery to Amazon S3 is determined by the Amazon S3 Buffer size and Buffer interval value that you configured for your delivery stream. Kinesis Data Firehose buffers incoming data before delivering it to Amazon S3. You can configure the values for Amazon S3 Buffer size (1-128 MB) or Buffer interval (60 – 900 seconds), and the condition satisfied first triggers data delivery to Amazon S3    
+    Type: Number
+    MinValue: 1
+    MaxValue: 128
+
+
+
+Conditions:
+  isRegional: !Equals     [ !Ref stackScope, Regional ]
+  isGlobal: !Equals  [ !Ref stackScope, Global ]
+  
+  CreateReadReplica: !Equals 
+    - !Ref MultiAZDatabase
+    - 'true'
+
+
+## Determines if we're generating regional or global resources
+
+
+#Mappings 
+
+Resources:
+# VPC Resources
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Subnet (AZ1)
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
+
+  PrivateSubnetDB1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnetDB1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Database Subnet (AZ1)
+
+  PrivateSubnetDB2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnetDB2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Database Subnet (AZ2)
+
+#NAT Gateway Resources
+  NatGateway1EIP:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: VPC
+      
+  NatGateway1:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} NAT Gateway 1 (AZ1)
+      
+  NatGateway2EIP:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: VPC
+      
+  NatGateway2:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} NAT Gateway 2 (AZ2)
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Public Route Table
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Route Table 1 (AZ1)
+          
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+
+      
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private Route Table 2 (AZ2)
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+ 
+
+
+  PrivateDBRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Private DB Route Table
+ 
+  PrivateSubnetDB1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateDBRouteTable
+      SubnetId: !Ref PrivateSubnetDB1
+  
+  PrivateSubnetDB2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateDBRouteTable
+      SubnetId: !Ref PrivateSubnetDB2  
+
+
+
+#Security Groups Resources
+  VPNSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Security group for Bastion instances
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+        - IpProtocol: udp
+          FromPort: '13000'
+          ToPort: '13003'
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref SSHLocation    
+      VpcId: !Ref VPC
+
+  DataBaseSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Open database for access
+      SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: '5432'
+         ToPort: '5432'
+         SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      VpcId: !Ref VPC
+
+
+
+
+  DBSecurityGroupIngress:
+      Type: 'AWS::EC2::SecurityGroupIngress'
+      Properties:
+        IpProtocol: tcp
+        FromPort: '5432'
+        ToPort: '5432'
+        SourceSecurityGroupId: !Ref DataBaseSecurityGroup
+        GroupId: !Ref DataBaseSecurityGroup
+      DependsOn: 
+        - DataBaseSecurityGroup     
+
+
+
+
+
+  ALBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable HTTP/HTTPS access on port 80/443
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref VPC
+
+  WebServerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable HTTP/HTTPS access via port 80/443 locked down to the load balancer SG + SSH access Bastion Host SG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          SourceSecurityGroupId: !Ref VPNSecurityGroup
+      VpcId: !Ref VPC
+      
+
+
+        
+#Bastion Resources
+  VPNInstance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: !Ref VPNAMIID
+      KeyName: !Ref EC2KeyName
+      InstanceType: !Ref VPNInstanceType
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+          - Ref: "VPNSecurityGroup"
+          - Ref: "DataBaseSecurityGroup"
+          SubnetId: !Ref "PublicSubnet1"
+
+
+#RDS Resources
+
+
+
+
+
+
+  DatabaseSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: Subnet Group for RDS Database
+      SubnetIds: 
+        - !Ref PrivateSubnetDB1
+        - !Ref PrivateSubnetDB2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Database Subnet Group
+
+  RDSDBClusterParameterGroup: 
+    Type: "AWS::RDS::DBClusterParameterGroup"  
+    Properties: 
+      Description: "A sample parameter group"
+      Family: aurora-postgresql10
+      Parameters: 
+        vacuum_cost_page_miss: 0
+   
+
+  RDSDBParameterGroup: 
+    Type: "AWS::RDS::DBParameterGroup"
+    Properties: 
+      Description: "CloudFormation Sample Parameter Group"
+      Family: aurora-postgresql10
+      Parameters: 
+        apg_plan_mgmt.plan_retention_period: 32
+  
+
+
+  RDSCluster: 
+    Type: 'AWS::RDS::DBCluster'
+    Properties: 
+        DBSubnetGroupName: !Ref DatabaseSubnetGroup
+        Engine: aurora-postgresql
+        MasterUserPassword: !Ref DatabasePassword
+        MasterUsername: !Ref DatabaseUser
+        DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
+        DatabaseName: !Ref DatabaseName1
+        Port: 5432
+        BackupRetentionPeriod: 1
+        VpcSecurityGroupIds: 
+            - !GetAtt 
+               - DataBaseSecurityGroup
+               - GroupId
+
+
+
+  DatabaseInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      Engine: aurora-postgresql
+      MultiAZ: !Ref MultiAZDatabase
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      DBParameterGroupName: !Ref RDSDBParameterGroup
+      DBClusterIdentifier: !Ref RDSCluster
+      PubliclyAccessible: "false"
+      
+
+#ALB1
+  ALBListenerNoSslCertificate:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: '80'
+      Protocol: HTTP
+
+  ALBListenerSslCertificate:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref AcmCertificate
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: '443'
+      Protocol: HTTPS
+
+  ApplicationLoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: 
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName} Applicaton Load Balancer
+
+  ALBTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: !Ref VPC
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '5'
+
+  #ALB2
+  ALBListenerNoSslCertificate2:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup2
+      LoadBalancerArn: !Ref ApplicationLoadBalancer2
+      Port: '80'
+      Protocol: HTTP
+
+  ALBListenerSslCertificate2:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref AcmCertificate
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup2
+      LoadBalancerArn: !Ref ApplicationLoadBalancer2
+      Port: '443'
+      Protocol: HTTPS
+
+  ApplicationLoadBalancer2:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: 
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName} Applicaton Load Balancer
+
+  ALBTargetGroup2:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: !Ref VPC
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '5'
+
+
+
+#Web Server
+  WebServerGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchConfigurationName: !Ref LaunchConfig
+      MinSize: !Ref WebAsgMin
+      MaxSize: !Ref WebAsgMax
+      DesiredCapacity: !Ref WebServerCapacity
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      NotificationConfiguration:
+        TopicARN: !Ref NotificationTopic
+        NotificationTypes:
+          - 'autoscaling:EC2_INSTANCE_LAUNCH'
+          - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+
+
+  WebServerScaleUpPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerGroup
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+
+  WebServerScaleDownPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerGroup
+      Cooldown: '60'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-up if CPU > 90% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '90'
+      AlarmActions:
+        - !Ref WebServerScaleUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerGroup
+      ComparisonOperator: GreaterThanThreshold
+
+  CPUAlarmLow:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-down if CPU < 70% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '70'
+      AlarmActions:
+        - !Ref WebServerScaleDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerGroup
+      ComparisonOperator: LessThanThreshold
+
+  LaunchConfig:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      ImageId: !Ref APP1AMIID
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      KeyName: !Ref EC2KeyName
+
+
+
+
+#Web Server
+  WebServerGroup2:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchConfigurationName: !Ref LaunchConfig2
+      MinSize: !Ref WebAsgMin
+      MaxSize: !Ref WebAsgMax
+      DesiredCapacity: !Ref WebServerCapacity
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup2
+      NotificationConfiguration:
+        TopicARN: !Ref NotificationTopic
+        NotificationTypes:
+          - 'autoscaling:EC2_INSTANCE_LAUNCH'
+          - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+
+
+  WebServerScaleUpPolicy2:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerGroup2
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+
+  WebServerScaleDownPolicy2:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerGroup2
+      Cooldown: '60'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh2:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-up if CPU > 90% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '90'
+      AlarmActions:
+        - !Ref WebServerScaleUpPolicy2
+      Dimensions:
+        - Name: AutoScalingGroupName2
+          Value: !Ref WebServerGroup2
+      ComparisonOperator: GreaterThanThreshold
+
+  CPUAlarmLow2:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-down if CPU < 70% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '70'
+      AlarmActions:
+        - !Ref WebServerScaleDownPolicy2
+      Dimensions:
+        - Name: AutoScalingGroupName2
+          Value: !Ref WebServerGroup2
+      ComparisonOperator: LessThanThreshold
+
+  LaunchConfig2:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      ImageId: !Ref APP2AMIID
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      KeyName: !Ref EC2KeyName
+
+
+
+
+
+#SNS Resources
+  NotificationTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperatorEMail
+          Protocol: email
+
+#S3
+  AppBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref BucketName
+      VersioningConfiguration:
+        Status: Suspended
+    DependsOn:
+      - VPC
+
+
+  mybucketpolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AppBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: FullAccess
+            Action: 'S3:*'
+            Effect: Allow
+            Resource: 
+              - !Sub "arn:aws:s3:::${AppBucket}"
+              - !Sub "arn:aws:s3:::${AppBucket}/*"
+            Principal:
+              AWS:
+                - !GetAtt CFNUser.Arn    
+  
+  CFNUser:
+    Type: AWS::IAM::User
+    
+
+
+  CFNKeys:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref 'CFNUser'
+#WAF ACL association with ALB 
+
+
+
+
+
+## 1.
+## OWASP Top 10 A1
+## Mitigate SQL Injection Attacks
+## Matches attempted SQLi patterns in the URI, QUERY_STRING, BODY, COOKIES
+  wafrSQLiSet:
+    Type: AWS::WAFRegional::SqlInjectionMatchSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-sqli']]
+      SqlInjectionMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: HTML_ENTITY_DECODE
+  wafgSQLiSet:
+    Type: AWS::WAF::SqlInjectionMatchSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-sqli']]
+      SqlInjectionMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: HTML_ENTITY_DECODE
+  wafrSQLiRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'mitigatesqli']]
+      Name: !Join ['-', [!Ref stackPrefix, 'mitigate-sqli']]
+      Predicates:
+        - Type: SqlInjectionMatch
+          Negated: false
+          DataId: !Ref wafrSQLiSet
+  wafgSQLiRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'mitigatesqli']]
+      Name: !Join ['-', [!Ref stackPrefix, 'mitigate-sqli']]
+      Predicates:
+        - Type: SqlInjectionMatch
+          Negated: false
+          DataId: !Ref wafgSQLiSet
+
+## 2.
+## OWASP Top 10 A2
+## Blacklist bad/hijacked JWT tokens or session IDs
+## Matches the specific values in the cookie or Authorization header
+## for JWT it is sufficient to check the signature
+  wafrAuthTokenStringSet:
+    Type: AWS::WAFRegional::ByteMatchSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-auth-tokens']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          PositionalConstraint: CONTAINS
+          TargetString: example-session-id
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: authorization
+          PositionalConstraint: ENDS_WITH
+          TargetString: .TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ
+          TextTransformation: URL_DECODE
+  wafgAuthTokenStringSet:
+    Type: AWS::WAF::ByteMatchSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-auth-tokens']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          PositionalConstraint: CONTAINS
+          TargetString: example-session-id
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: authorization
+          PositionalConstraint: ENDS_WITH
+          TargetString: .TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ
+          TextTransformation: URL_DECODE
+  wafrAuthTokenRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'badauthtokens']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-bad-auth-tokens']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafrAuthTokenStringSet
+  wafgAuthTokenRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'badauthtokens']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-bad-auth-tokens']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafgAuthTokenStringSet
+
+
+## 3.
+## OWASP Top 10 A3
+## Mitigate Cross Site Scripting Attacks
+## Matches attempted XSS patterns in the URI, QUERY_STRING, BODY, COOKIES
+  wafrXSSSet:
+    Type: AWS::WAFRegional::XssMatchSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-xss']]
+      XssMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: HTML_ENTITY_DECODE
+  wafgXSSSet:
+    Type: AWS::WAF::XssMatchSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-xss']]
+      XssMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: HTML_ENTITY_DECODE
+  wafrXSSRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'mitigatexss']]
+      Name: !Join ['-', [!Ref stackPrefix, 'mitigate-xss']]
+      Predicates:
+        - Type: XssMatch
+          Negated: false
+          DataId: !Ref wafrXSSSet
+  wafgXSSRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'mitigatexss']]
+      Name: !Join ['-', [!Ref stackPrefix, 'mitigate-xss']]
+      Predicates:
+        - Type: XssMatch
+          Negated: false
+          DataId: !Ref wafgXSSSet
+
+## 4.
+## OWASP Top 10 A4
+## Path Traversal, LFI, RFI
+## Matches request patterns designed to traverse filesystem paths, and include
+## local or remote files
+  wafrPathsStringSet:
+    Type: AWS::WAFRegional::ByteMatchSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-rfi-lfi-traversal']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: CONTAINS
+          TargetString: ../
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: CONTAINS
+          TargetString: ../
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: ../
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: ../
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: CONTAINS
+          TargetString: ://
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: CONTAINS
+          TargetString: ://
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: ://
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: ://
+          TextTransformation: HTML_ENTITY_DECODE
+  wafgPathsStringSet:
+    Type: AWS::WAF::ByteMatchSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-rfi-lfi-traversal']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: CONTAINS
+          TargetString: ../
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: CONTAINS
+          TargetString: ../
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: ../
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: ../
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: CONTAINS
+          TargetString: ://
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: CONTAINS
+          TargetString: ://
+          TextTransformation: HTML_ENTITY_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: ://
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: ://
+          TextTransformation: HTML_ENTITY_DECODE
+  wafrPathsRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'detectrfilfi']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-rfi-lfi-traversal']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafrPathsStringSet
+  wafgPathsRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'detectrfilfi']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-rfi-lfi-traversal']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafgPathsStringSet
+
+## 5.
+## OWASP Top 10 A4
+## Privileged Module Access Restrictions
+## Restrict access to the admin interface to known source IPs only
+## Matches the URI prefix, when the remote IP isn't in the whitelist
+  wafrAdminUrlStringSet:
+    Type: AWS::WAFRegional::ByteMatchSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-admin-url']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: STARTS_WITH
+          TargetString: !Ref adminUrlPrefix
+          TextTransformation: URL_DECODE
+  wafgAdminUrlStringSet:
+    Type: AWS::WAF::ByteMatchSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-admin-url']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: STARTS_WITH
+          TargetString: !Ref adminUrlPrefix
+          TextTransformation: URL_DECODE
+  wafrAdminRemoteAddrIpSet:
+    Type: AWS::WAFRegional::IPSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-admin-remote-ip']]
+      IPSetDescriptors:
+        - Type: IPV4
+          Value: !Ref adminRemoteCidr
+  wafgAdminRemoteAddrIpSet:
+    Type: AWS::WAF::IPSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-admin-remote-ip']]
+      IPSetDescriptors:
+        - Type: IPV4
+          Value: !Ref adminRemoteCidr
+  wafrAdminAccessRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'detectadminaccess']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-admin-access']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafrAdminUrlStringSet
+        - Type: IPMatch
+          Negated: true
+          DataId: !Ref wafrAdminRemoteAddrIpSet
+  wafgAdminAccessRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'detectadminaccess']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-admin-access']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafgAdminUrlStringSet
+        - Type: IPMatch
+          Negated: true
+          DataId: !Ref wafgAdminRemoteAddrIpSet
+
+## 6.
+## OWASP Top 10 A5
+## PHP Specific Security Misconfigurations
+## Matches request patterns designed to exploit insecure PHP/CGI configuration
+  wafrPHPInsecureQSStringSet:
+    Type: AWS::WAFRegional::ByteMatchSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-php-insecure-var-refs']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: _SERVER[
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: _ENV[
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: auto_prepend_file=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: auto_append_file=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: allow_url_include=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: disable_functions=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: open_basedir=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: safe_mode=
+          TextTransformation: URL_DECODE
+  wafgPHPInsecureQSStringSet:
+    Type: AWS::WAF::ByteMatchSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-php-insecure-var-refs']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: _SERVER[
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: _ENV[
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: auto_prepend_file=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: auto_append_file=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: allow_url_include=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: disable_functions=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: open_basedir=
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: QUERY_STRING
+          PositionalConstraint: CONTAINS
+          TargetString: safe_mode=
+          TextTransformation: URL_DECODE
+  wafrPHPInsecureURIStringSet:
+    Type: AWS::WAFRegional::ByteMatchSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-php-insecure-uri']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: php
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: /
+          TextTransformation: URL_DECODE
+  wafgPHPInsecureURIStringSet:
+    Type: AWS::WAF::ByteMatchSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-php-insecure-uri']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: php
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: /
+          TextTransformation: URL_DECODE
+  wafrPHPInsecureRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'detectphpinsecure']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-php-insecure']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafrPHPInsecureQSStringSet
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafrPHPInsecureURIStringSet
+  wafgPHPInsecureRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'detectphpinsecure']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-php-insecure']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafgPHPInsecureQSStringSet
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafgPHPInsecureURIStringSet
+
+## 7.
+## OWASP Top 10 A7
+## Mitigate abnormal requests via size restrictions
+## Enforce consistent request hygene, limit size of key elements
+  wafrSizeRestrictionSet:
+    Type: AWS::WAFRegional::SizeConstraintSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'size-restrictions']]
+      SizeConstraints:
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: NONE
+          ComparisonOperator: GT
+          Size: !Ref maxExpectedURISize
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: NONE
+          ComparisonOperator: GT
+          Size: !Ref maxExpectedQueryStringSize
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: NONE
+          ComparisonOperator: GT
+          Size: !Ref maxExpectedBodySize
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: NONE
+          ComparisonOperator: GT
+          Size: !Ref maxExpectedCookieSize
+  wafgSizeRestrictionSet:
+    Type: AWS::WAF::SizeConstraintSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'size-restrictions']]
+      SizeConstraints:
+        - FieldToMatch:
+            Type: URI
+          TextTransformation: NONE
+          ComparisonOperator: GT
+          Size: !Ref maxExpectedURISize
+        - FieldToMatch:
+            Type: QUERY_STRING
+          TextTransformation: NONE
+          ComparisonOperator: GT
+          Size: !Ref maxExpectedQueryStringSize
+        - FieldToMatch:
+            Type: BODY
+          TextTransformation: NONE
+          ComparisonOperator: GT
+          Size: !Ref maxExpectedBodySize
+        - FieldToMatch:
+            Type: HEADER
+            Data: cookie
+          TextTransformation: NONE
+          ComparisonOperator: GT
+          Size: !Ref maxExpectedCookieSize
+  wafrSizeRestrictionRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'restrictsizes']]
+      Name: !Join ['-', [!Ref stackPrefix, 'restrict-sizes']]
+      Predicates:
+        - Type: SizeConstraint
+          Negated: false
+          DataId: !Ref wafrSizeRestrictionSet
+  wafgSizeRestrictionRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'restrictsizes']]
+      Name: !Join ['-', [!Ref stackPrefix, 'restrict-sizes']]
+      Predicates:
+        - Type: SizeConstraint
+          Negated: false
+          DataId: !Ref wafgSizeRestrictionSet
+
+## 8.
+## OWASP Top 10 A8
+## CSRF token enforcement example
+## Enforce the presence of CSRF token in request header
+  wafrCSRFMethodStringSet:
+    Type: AWS::WAFRegional::ByteMatchSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-csrf-method']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: METHOD
+          PositionalConstraint: EXACTLY
+          TargetString: post
+          TextTransformation: LOWERCASE
+  wafgCSRFMethodStringSet:
+    Type: AWS::WAF::ByteMatchSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-csrf-method']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: METHOD
+          PositionalConstraint: EXACTLY
+          TargetString: post
+          TextTransformation: LOWERCASE
+  wafrCSRFTokenSizeConstraint:
+    Type: AWS::WAFRegional::SizeConstraintSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-csrf-token']]
+      SizeConstraints:
+        - FieldToMatch:
+            Type: HEADER
+            Data: !Ref csrfExpectedHeader
+          TextTransformation: NONE
+          ComparisonOperator: EQ
+          Size: !Ref csrfExpectedSize
+  wafgCSRFTokenSizeConstraint:
+    Type: AWS::WAF::SizeConstraintSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-csrf-token']]
+      SizeConstraints:
+        - FieldToMatch:
+            Type: HEADER
+            Data: !Ref csrfExpectedHeader
+          TextTransformation: NONE
+          ComparisonOperator: EQ
+          Size: !Ref csrfExpectedSize
+  wafrCSRFRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'enforcecsrf']]
+      Name: !Join ['-', [!Ref stackPrefix, 'enforce-csrf']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafrCSRFMethodStringSet
+        - Type: SizeConstraint
+          Negated: true
+          DataId: !Ref wafrCSRFTokenSizeConstraint
+  wafgCSRFRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'enforcecsrf']]
+      Name: !Join ['-', [!Ref stackPrefix, 'enforce-csrf']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafgCSRFMethodStringSet
+        - Type: SizeConstraint
+          Negated: true
+          DataId: !Ref wafgCSRFTokenSizeConstraint
+
+## 9.
+## OWASP Top 10 A9
+## Server-side includes & libraries in webroot
+## Matches request patterns for webroot objects that shouldn't be directly accessible
+  wafrServerSideIncludeStringSet:
+    Type: AWS::WAFRegional::ByteMatchSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-ssi']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: STARTS_WITH
+          TargetString: !Ref includesPrefix
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .cfg
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .conf
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .config
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .ini
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .log
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .bak
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .backup
+          TextTransformation: LOWERCASE
+  wafgServerSideIncludeStringSet:
+    Type: AWS::WAF::ByteMatchSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-ssi']]
+      ByteMatchTuples:
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: STARTS_WITH
+          TargetString: !Ref includesPrefix
+          TextTransformation: URL_DECODE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .cfg
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .conf
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .config
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .ini
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .log
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .bak
+          TextTransformation: LOWERCASE
+        - FieldToMatch:
+            Type: URI
+          PositionalConstraint: ENDS_WITH
+          TargetString: .backup
+          TextTransformation: LOWERCASE
+  wafrServerSideIncludeRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'detectssi']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-ssi']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafrServerSideIncludeStringSet
+  wafgServerSideIncludeRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'detectssi']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-ssi']]
+      Predicates:
+        - Type: ByteMatch
+          Negated: false
+          DataId: !Ref wafgServerSideIncludeStringSet
+
+## 10.
+## Generic
+## IP Blacklist
+## Matches IP addresses that should not be allowed to access content
+  wafrBlacklistIpSet:
+    Type: AWS::WAFRegional::IPSet
+    Condition: isRegional
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-blacklisted-ips']]
+      IPSetDescriptors:
+        - Type: IPV4
+          Value: 10.0.0.0/8
+        - Type: IPV4
+          Value: 192.168.0.0/16
+        - Type: IPV4
+          Value: 169.254.0.0/16
+        - Type: IPV4
+          Value: 172.16.0.0/16
+        - Type: IPV4
+          Value: 127.0.0.1/32
+  wafgBlacklistIpSet:
+    Type: AWS::WAF::IPSet
+    Condition: isGlobal
+    Properties:
+      Name: !Join ['-', [!Ref stackPrefix, 'match-blacklisted-ips']]
+      IPSetDescriptors:
+        - Type: IPV4
+          Value: 10.0.0.0/8
+        - Type: IPV4
+          Value: 192.168.0.0/16
+        - Type: IPV4
+          Value: 169.254.0.0/16
+        - Type: IPV4
+          Value: 172.16.0.0/16
+        - Type: IPV4
+          Value: 127.0.0.1/32
+  wafrBlacklistIpRule:
+    Type: AWS::WAFRegional::Rule
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'blacklistedips']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-blacklisted-ips']]
+      Predicates:
+        - Type: IPMatch
+          Negated: false
+          DataId: !Ref wafrBlacklistIpSet
+  wafgBlacklistIpRule:
+    Type: AWS::WAF::Rule
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'blacklistedips']]
+      Name: !Join ['-', [!Ref stackPrefix, 'detect-blacklisted-ips']]
+      Predicates:
+        - Type: IPMatch
+          Negated: false
+          DataId: !Ref wafgBlacklistIpSet
+
+## --
+## WebACL containing the above rules evaluated in-order
+  wafrwaspACL:
+    Type: AWS::WAFRegional::WebACL
+    Condition: isRegional
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'owaspacl']]
+      Name: !Join ['-', [!Ref stackPrefix, 'owasp-acl']]
+      DefaultAction:
+        Type: ALLOW
+      Rules:
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 10
+          RuleId: !Ref wafrSizeRestrictionRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 20
+          RuleId: !Ref wafrBlacklistIpRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 30
+          RuleId: !Ref wafrAuthTokenRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 40
+          RuleId: !Ref wafrSQLiRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 50
+          RuleId: !Ref wafrXSSRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 60
+          RuleId: !Ref wafrPathsRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 70
+          RuleId: !Ref wafrPHPInsecureRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 80
+          RuleId: !Ref wafrCSRFRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 90
+          RuleId: !Ref wafrServerSideIncludeRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 100
+          RuleId: !Ref wafrAdminAccessRule
+  wafgOwaspACL:
+    Type: AWS::WAF::WebACL
+    Condition: isGlobal
+    Properties:
+      MetricName: !Join ['', [!Ref stackPrefix, 'owaspacl']]
+      Name: !Join ['-', [!Ref stackPrefix, 'owasp-acl']]
+      DefaultAction:
+        Type: ALLOW
+      Rules:
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 10
+          RuleId: !Ref wafgSizeRestrictionRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 20
+          RuleId: !Ref wafgBlacklistIpRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 30
+          RuleId: !Ref wafgAuthTokenRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 40
+          RuleId: !Ref wafgSQLiRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 50
+          RuleId: !Ref wafgXSSRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 60
+          RuleId: !Ref wafgPathsRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 70
+          RuleId: !Ref wafgPHPInsecureRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 80
+          RuleId: !Ref wafgCSRFRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 90
+          RuleId: !Ref wafgServerSideIncludeRule
+        - Action:
+            Type: !Ref ruleAction
+          Priority: 100
+          RuleId: !Ref wafgAdminAccessRule
+
+
+#WAF Logging
+  s3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+  deliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+        AssumeRolePolicyDocument:
+            Version: 2012-10-17
+            Statement:
+            -
+                Effect: Allow
+                Principal:
+                    Service: firehose.amazonaws.com
+                Action: 'sts:AssumeRole'
+                Condition:
+                    StringEquals:
+                     'sts:ExternalId': !Ref 'AWS::AccountId'
+        Policies:
+          -
+            PolicyName: !Join
+                - ''
+                - - 'kinesis_delivery_'
+                  - !Ref AWS::StackName
+            PolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                - 
+                    Effect: Allow
+                    Action:
+                        - 's3:AbortMultipartUpload'
+                        - 's3:GetBucketLocation'
+                        - 's3:GetObject'
+                        - 's3:ListBucket'
+                        - 's3:ListBucketMultipartUploads'
+                        - 's3:PutObject'
+                        - 'lambda:InvokeFunction' 
+                        - 'lambda:GetFunctionConfiguration'  
+                    Resource:
+                    - !Join 
+                        - ''
+                        - - 'arn:aws:s3:::'
+                          - !Ref s3Bucket
+                    - !Join 
+                        - ''
+                        - - 'arn:aws:s3:::'
+                          - !Ref s3Bucket
+                          - '*'
+                  
+  firehoseDeliveryStream: 
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: 
+        !Join
+          - ''
+          - - 'aws-waf-logs-'
+            - !Ref AWS::StackName
+      DeliveryStreamType: DirectPut      
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !Join 
+          - ''
+          - - 'arn:aws:s3:::'
+            - !Ref s3Bucket
+        BufferingHints:
+          IntervalInSeconds: !Ref KinesisBufferIntervalSeconds
+          SizeInMBs: !Ref KinesisBufferSizeMB
+        CompressionFormat: UNCOMPRESSED
+        Prefix: firehose/
+        RoleARN: !GetAtt deliveryRole.Arn
+
+
+ 
+
+
+  WAFWebACLAssociation1:
+    Type: 'AWS::WAFRegional::WebACLAssociation'
+    Properties:
+      ResourceArn: !Ref ApplicationLoadBalancer
+      WebACLId: !Ref wafrwaspACL
+
+  WAFWebACLAssociation2:
+    Type: 'AWS::WAFRegional::WebACLAssociation'
+    Properties:
+      ResourceArn: !Ref ApplicationLoadBalancer2
+      WebACLId: !Ref wafrwaspACL
+
+
+Outputs:
+#VPC
+  VPC:
+    Description: A reference to the created VPC
+    Value: !Ref VPC
+    
+  PublicSubnet1:
+    Description: A reference to the public subnet in the 1st Availability Zone
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2:
+    Description: A reference to the public subnet in the 2nd Availability Zone
+    Value: !Ref PublicSubnet2
+
+  PrivateSubnet1:
+    Description: A reference to the private web subnet in the 1st Availability Zone
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2:
+    Description: A reference to the private web subnet in the 2nd Availability Zone
+    Value: !Ref PrivateSubnet2
+
+  PrivateSubnetDB1:
+    Description: A reference to the private database subnet in the 1st Availability Zone
+    Value: !Ref PrivateSubnetDB1
+
+  PrivateSubnetDB2:
+    Description: A reference to the private database subnet in the 2nd Availability Zone
+    Value: !Ref PrivateSubnetDB2
+
+#ALB
+  URL:
+    Description: Application Load Balancer Endpoint
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - ApplicationLoadBalancer
+          - DNSName
+
+  URL2:
+    Description: Application Load Balancer Endpoint
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - ApplicationLoadBalancer2
+          - DNSName  
+
+
+
+
+
+#Database
+  DBEndpoint:
+    Description: PostgreSQL Database Endpoint
+    Value: !Join 
+      - ''
+      - - !GetAtt 
+          - DatabaseInstance
+          - Endpoint.Address
+        - ':5432'
+
+  DBUser:
+    Description: PostgreSQL Datebase Username
+    Value: !Ref DatabaseUser
+
+  DBName:
+    Description: PostgreSQL Database Name
+    Value: !Ref DatabaseName1
+
+ 
+#S3 Bucket and IAM output
+
+  S3Bucket:
+    Value: !Ref AppBucket
+    Description: S3 bucket to use with application 
+
+  AccessKey:
+    Value: !Ref 'CFNKeys'
+    Description: AWSAccessKeyId of new user
+  SecretKey:
+    Value: !GetAtt [CFNKeys, SecretAccessKey]
+    Description: AWSSecretAccessKey of new user   
+
+
+#WAF
+
+  wafWebACL:
+    Value: !If [ isRegional, !Ref wafrwaspACL, !Ref wafgOwaspACL ]
+  wafWebACLMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'owaspacl']]
+  wafSQLiRule:
+    Value: !If [ isRegional, !Ref wafrSQLiRule, !Ref wafgSQLiRule ]
+  wafSQLiRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'mitigatesqli']]
+  wafAuthTokenRule:
+    Value: !If [ isRegional, !Ref wafrAuthTokenRule, !Ref wafgAuthTokenRule ]
+  wafAuthTokenRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'badauthtokens']]
+  wafXSSRule:
+    Value: !If [ isRegional, !Ref wafrXSSRule, !Ref wafgXSSRule ]
+  wafXSSRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'mitigatexss']]
+  wafPathsRule:
+    Value: !If [ isRegional, !Ref wafrPathsRule, !Ref wafgPathsRule ]
+  wafPathsRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'detectrfilfi']]
+  wafPHPMisconfigRule:
+    Value: !If [ isRegional, !Ref wafrPHPInsecureRule, !Ref wafgPHPInsecureRule ]
+  wafPHPMisconfigRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'detectphpinsecure']]
+  wafAdminAccessRule:
+    Value: !If [ isRegional, !Ref wafrAdminAccessRule, !Ref wafgAdminAccessRule ]
+  wafAdminAccessRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'detectadminaccess']]
+  wafCSRFRule:
+    Value: !If [ isRegional, !Ref wafrCSRFRule, !Ref wafgCSRFRule ]
+  wafCSRFRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'enforcecsrf']]
+  wafSSIRule:
+    Value: !If [ isRegional, !Ref wafrServerSideIncludeRule, !Ref wafgServerSideIncludeRule ]
+  wafSSIRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'detectssi']]
+  wafBlacklistIpRule:
+    Value: !If [ isRegional, !Ref wafrBlacklistIpRule, !Ref wafgBlacklistIpRule ]
+  wafBlacklistIpRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'blacklistedips']]
+  wafSizeRestrictionRule:
+    Value: !If [ isRegional, !Ref wafrSizeRestrictionRule, !Ref wafgSizeRestrictionRule ]
+  wafSizeRestrictionRuleMetric:
+    Value: !Join ['', [!Ref stackPrefix, 'restrictsizes']]
+  wafAuthTokenBlacklist:
+    Value: !If [ isRegional, !Ref wafrAuthTokenStringSet, !Ref wafgAuthTokenStringSet ]
+  wafAdminAccessWhitelist:
+    Value: !If [ isRegional, !Ref wafrAdminRemoteAddrIpSet, !Ref wafgAdminRemoteAddrIpSet ]
+  wafIpBlacklist:
+    Value: !If [ isRegional, !Ref wafrBlacklistIpSet, !Ref wafgBlacklistIpSet ]
+  S3BucketDomainName:
+    Description: 'S3 bucket domain name'
+    Value: !GetAtt s3Bucket.DomainName
+  KinesisFireHoseDeliveryStream:
+    Description: 'Kinesis Delivery Stream'
+    Value: !GetAtt firehoseDeliveryStream.Arn
