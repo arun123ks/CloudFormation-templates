@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: 2010-09-09 
+Description:   
+  This template creates wordpress stack based on AWS bestest practice.
+
+
+
+Parameters:  
+
+#Bastion Parameters
+  VPCStackName:
+          Description: The name of the VPC stack that exports the values
+          Type: String
+
+  SGStackName:
+          Description: The name of the SG stack that exports the values
+          Type: String        
+
+  VPNInstanceType:
+    Description: Amazon EC2 instance type for the bastion instances
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.nano	
+      - t3.micro
+      - t3.medium
+     
+    ConstraintDescription: Must be a valid EC2 instance type.
+
+  EC2KeyName:
+    Description: Name of an EC2 KeyPair to enable SSH access to the instance.
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+
+  VPNAMIID:
+    Description: AMI ID of VPN Instane, please eneter Pritunl AMI ID.
+    Type: String
+    ConstraintDescription: Must be the ID of an existing AMI.
+
+Resources:
+
+  VPNInstance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: !Ref VPNAMIID
+      KeyName: !Ref EC2KeyName
+      InstanceType: !Ref VPNInstanceType
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+           - Fn::ImportValue: !Sub '${SGStackName}-VPNSecurityGroup'
+           - Fn::ImportValue: !Sub '${SGStackName}-DataBaseSecurityGroup'
+          SubnetId:  
+            Fn::ImportValue: !Sub '${VPCStackName}-PublicSubnet1'    
+
+
+

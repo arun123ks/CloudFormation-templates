@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: 2010-09-09 
+Description:   
+  This template creates wordpress stack based on AWS bestest practice.
+#Security Groups Resources
+
+
+
+Parameters:  
+
+  VPCStackName:
+          Description: The name of the VPC stack that exports the values
+          Type: String
+
+  SGStackName:
+          Description: The name of the SG stack that exports the values
+          Type: String
+
+
+
+
+
+  #RDS Parameters
+  DatabaseName1:
+    Description: MySQL database name
+    Default: myDatabase
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DatabaseUser:
+    Description: Username for MySQL database access
+    NoEcho: 'true'
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DatabasePassword:
+    Description: Password for MySQL database access
+    NoEcho: 'true'
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+
+  DatabaseBackupRetentionPeriod:
+    ConstraintDescription: Database backup retention period must be between 1 and 35 days
+    Default: '1'
+    Description: The number of days for which automatic DB snapshots are retained
+    MaxValue: '35'
+    MinValue: '0'
+    Type: Number
+
+  DatabaseAllocatedStorage:
+    Description: The size of the database (Gb)
+    Default: '5'
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 5 and 1024Gb.
+
+  DatabaseInstanceClass:
+    Description: The database instance type
+    Type: String
+    Default: db.t2.small
+    AllowedValues:
+      - db.t2.small
+      - db.t2.medium
+      - db.t3.small
+      - db.t3.medium
+      - db.r4.large
+      - db.r4.xlarge
+      - db.r4.2xlarge
+      - db.r4.4xlarge
+      - db.r4.8xlarge
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4large
+      - db.r5.12large
+      
+    ConstraintDescription: must select a valid database instance type.
+
+  MultiAZDatabase:
+    Description: Create a Multi-AZ MySQL Amazon RDS database instance
+    Default: 'false'
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    ConstraintDescription: must be either true or false.
+
+
+
+Conditions:
+  CreateReadReplica: !Equals 
+    - !Ref MultiAZDatabase
+    - 'true'
+
+
+Resources:
+
+  DatabaseSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: Subnet Group for RDS Database
+      SubnetIds: 
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnetDB1'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnetDB2'
+      Tags:
+        - Key: Name
+          Value: !Sub Asterisk Database Subnet Group
+
+
+
+
+# VPC Resources
+  RDSDBClusterParameterGroup: 
+    Type: "AWS::RDS::DBClusterParameterGroup"  
+    Properties: 
+      Description: "A sample parameter group"
+      Family: aurora-mysql5.7
+      Parameters: 
+        default_password_lifetime: 0
+   
+
+  RDSDBParameterGroup: 
+    Type: "AWS::RDS::DBParameterGroup"
+    Properties: 
+      Description: "CloudFormation Sample Parameter Group"
+      Family: aurora-mysql5.7
+      Parameters: 
+        explicit_defaults_for_timestamp: 1
+  
+
+
+  RDSCluster: 
+    Type: 'AWS::RDS::DBCluster'
+    Properties: 
+        DBSubnetGroupName: !Ref DatabaseSubnetGroup
+        Engine: aurora-mysql
+        MasterUserPassword: !Ref DatabasePassword
+        MasterUsername: !Ref DatabaseUser
+        DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
+        DatabaseName: !Ref DatabaseName1
+        Port: 3306
+        BackupRetentionPeriod: 1
+        VpcSecurityGroupIds: 
+           - Fn::ImportValue: !Sub '${SGStackName}-DataBaseSecurityGroup' 
+
+
+
+  DatabaseInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      Engine: aurora-mysql
+      MultiAZ: !Ref MultiAZDatabase
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      DBParameterGroupName: !Ref RDSDBParameterGroup
+      DBClusterIdentifier: !Ref RDSCluster
+      PubliclyAccessible: "false"
+      
+  
+Outputs:
+
+
+
+#Database
+  DBEndpoint:
+    Description: MySQL Database Endpoint
+    Value: !Join 
+      - ''
+      - - !GetAtt 
+          - DatabaseInstance
+          - Endpoint.Address
+        - ':3306'
+    Export:
+      Name: !Sub ${AWS::StackName}-DBEndpoint    
+
+  DBUser:
+    Description: MySQL Datebase Username
+    Value: !Ref DatabaseUser
+    Export:
+      Name: !Sub ${AWS::StackName}-DBUser
+
+
+  DBName:
+    Description: MySQL Database Name
+    Value: !Ref DatabaseName1
+    Export:
+      Name: !Sub ${AWS::StackName}-DBName
+
+  DBPass:
+    Description: MySQL Database UserPass
+    Value: !Ref DatabasePassword
+    Export:
+      Name: !Sub ${AWS::StackName}-DBPass
