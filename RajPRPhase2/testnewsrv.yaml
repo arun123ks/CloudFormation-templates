@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: 2010-09-09 
+Description:   
+  This template creates stack based on AWS bestest practice.
+
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+#Environment Label
+      - 
+        Label: 
+          default: "AWS Environment"
+        Parameters: 
+          - EnvironmentName
+
+
+Parameters:
+#Environment Parameters
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+    
+
+
+
+    
+  SSHLocation:
+    Description: 'The IP address range that can be used to access the web server using SSH.'
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 10.0.0.237/32
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    
+
+
+  EC2KeyName:
+    Description: Name of an EC2 KeyPair to enable SSH access to the instance.
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+
+  NEWSRVAMIID:
+    Description: AMI ID of VPN Instane, please eneter Pritunl AMI ID.
+    Type: String
+    ConstraintDescription: Must be the ID of an existing AMI.
+ 
+  VPCStackName:
+    Description: The name of the VPC stack that exports the values
+    Type: String  
+
+
+#Web Server Parameters
+  InstanceType:
+    Description: WebServers EC2 instance type
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.medium
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.8xlarge
+      - m5.12xlarge
+      - m5.16xlarge
+ 
+    ConstraintDescription: Must be a valid EC2 instance type.
+
+ 
+#Mappings 
+
+Resources:
+
+#Security Groups Resources
+
+
+ 
+  NSRVSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable HTTP/HTTPS access on port 80/443
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: !Ref SSHLocation
+
+      VpcId: 
+         Fn::ImportValue: !Sub '${VPCStackName}-VPC'
+
+
+
+
+  #NEWSERVER Resources
+  NSRVInstance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: !Ref NEWSRVAMIID
+      KeyName: !Ref EC2KeyName
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+          - Ref: "NSRVSecurityGroup"
+          SubnetId: 
+               Fn::ImportValue: 
+                  Fn::Sub: "${VPCStackName}-PrivateSubnet1"
+
+
+
+
+
+
+
+
+
+
+

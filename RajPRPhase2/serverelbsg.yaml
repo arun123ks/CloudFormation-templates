@@ -1,0 +1,602 @@
+AWSTemplateFormatVersion: 2010-09-09 
+Description:   
+  This template creates stack based on AWS bestest practice.
+
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+#Environment Label
+      - 
+        Label: 
+          default: "AWS Environment"
+        Parameters: 
+          - EnvironmentName
+          - OperatorEMail
+          - AcmCertificate
+
+#Web Server Label
+      - 
+        Label: 
+          default: "Web Server Parameters"
+        Parameters:
+          - InstanceType
+          - WebAsgMax
+          - WebAsgMin
+          - WebServerCapacity
+
+#S3
+      - 
+        Label: 
+          default: "S3 Parameters"
+        Parameters:
+          - BucketName
+          
+        
+
+Parameters:
+#Environment Parameters
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+    
+  OperatorEMail:
+    Description: EMail address to notify if there are any scaling operations
+    Type: String
+    AllowedPattern: >-
+      ([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)
+    ConstraintDescription: must be a valid email address.
+
+  AcmCertificate:
+    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
+    Description: '[ Optional ] The AWS Certification Manager certificate ARN for the ALB certificate - this certificate should be created in the region you wish to run the ALB and must reference the domain name you use below.'
+    Type: String
+
+
+    
+  SSHLocation:
+    Description: 'The IP address range that can be used to access the web server using SSH.'
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 10.0.0.237/32
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    
+
+
+  EC2KeyName:
+    Description: Name of an EC2 KeyPair to enable SSH access to the instance.
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair.
+
+  NEWSRVAMIID:
+    Description: AMI ID of VPN Instane, please eneter Pritunl AMI ID.
+    Type: String
+    ConstraintDescription: Must be the ID of an existing AMI.
+  
+  APP1AMIID:
+    Description: AMI ID of APP1 Instane, please enter App1 AMI ID.
+    Type: String
+    ConstraintDescription: Must be the ID of an existing AMI. 
+
+  APP2AMIID:
+    Description: AMI ID of APP2 Instane, please enter App2 AMI ID.
+    Type: String
+    ConstraintDescription: Must be the ID of an existing AMI. 
+
+  VPCStackName:
+    Description: The name of the VPC stack that exports the values
+    Type: String  
+
+  
+#Web Server Parameters
+  InstanceType:
+    Description: WebServers EC2 instance type
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.medium
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.8xlarge
+      - m5.12xlarge
+      - m5.16xlarge
+ 
+    ConstraintDescription: Must be a valid EC2 instance type.
+
+  WebAsgMax:
+    AllowedPattern: ^((?!0$)[1-2]?[0-9]|30)$
+    ConstraintDescription: Must be a number between 1 and 30.
+    Default: 4
+    Description: Specifies the maximum number of EC2 instances in the Web Autoscaling Group.
+    Type: String
+
+  WebAsgMin:
+    AllowedPattern: ^([0-0]?[0-9]|10)$
+    ConstraintDescription: Must be a number between 0 and 10.
+    Default: 2
+    Description: Specifies the minimum number of EC2 instances in the Web Autoscaling Group.
+    Type: String
+
+  WebServerCapacity:
+    Description: The initial number of WebServer instances
+    Default: '2'
+    Type: Number
+    ConstraintDescription: must be between 2 and 4 EC2 instances.
+
+#S3
+  BucketName:
+    Description: The name of bucket where course files are stored
+    Type: String
+    Default: appbuckettomcat
+
+
+#Mappings 
+
+Resources:
+
+#Security Groups Resources
+
+
+  ALBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable HTTP/HTTPS access on port 80/443
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      VpcId: 
+         Fn::ImportValue: !Sub '${VPCStackName}-VPC'
+
+  WebServerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable HTTP/HTTPS access via port 80/443 locked down to the load balancer SG + SSH access Bastion Host SG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation 
+        - IpProtocol: tcp
+          FromPort: '8080'
+          ToPort: '8080'
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: '8080'
+          ToPort: '8080'
+          CidrIp: !Ref SSHLocation 
+
+      VpcId: 
+         Fn::ImportValue: !Sub '${VPCStackName}-VPC' 
+      
+
+  NSRVSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable HTTP/HTTPS access on port 80/443
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: !Ref SSHLocation
+
+      VpcId: 
+         Fn::ImportValue: !Sub '${VPCStackName}-VPC'
+
+
+
+#ALB1
+  ALBListenerNoSslCertificate:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: '80'
+      Protocol: HTTP
+
+  ALBListenerSslCertificate:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref AcmCertificate
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: '443'
+      Protocol: HTTPS
+
+  ApplicationLoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: 
+        - Fn::ImportValue: !Sub '${VPCStackName}-PublicSubnet1'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PublicSubnet2'
+      Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName} Applicaton Load Balancer
+
+  ALBTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Port: 8080
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: 
+         Fn::ImportValue: !Sub '${VPCStackName}-VPC'
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '5'
+
+  #ALB2
+  ALBListenerNoSslCertificate2:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup2
+      LoadBalancerArn: !Ref ApplicationLoadBalancer2
+      Port: '80'
+      Protocol: HTTP
+
+  ALBListenerSslCertificate2:
+    Type : AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref AcmCertificate
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup2
+      LoadBalancerArn: !Ref ApplicationLoadBalancer2
+      Port: '443'
+      Protocol: HTTPS
+
+  ApplicationLoadBalancer2:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: 
+        - Fn::ImportValue: !Sub '${VPCStackName}-PublicSubnet1'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PublicSubnet2'
+      Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName} Applicaton Load Balancer
+
+  ALBTargetGroup2:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Port: 8080
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: 
+         Fn::ImportValue: !Sub '${VPCStackName}-VPC'
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '5'
+
+
+
+#Web Server
+  WebServerGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2'
+      LaunchConfigurationName: !Ref LaunchConfig
+      MinSize: !Ref WebAsgMin
+      MaxSize: !Ref WebAsgMax
+      DesiredCapacity: !Ref WebServerCapacity
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      NotificationConfiguration:
+        TopicARN: !Ref NotificationTopic
+        NotificationTypes:
+          - 'autoscaling:EC2_INSTANCE_LAUNCH'
+          - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+
+
+  WebServerScaleUpPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerGroup
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+
+  WebServerScaleDownPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerGroup
+      Cooldown: '60'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-up if CPU > 90% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '90'
+      AlarmActions:
+        - !Ref WebServerScaleUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerGroup
+      ComparisonOperator: GreaterThanThreshold
+
+  CPUAlarmLow:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-down if CPU < 70% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '70'
+      AlarmActions:
+        - !Ref WebServerScaleDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerGroup
+      ComparisonOperator: LessThanThreshold
+
+  LaunchConfig:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      ImageId: !Ref APP1AMIID
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      KeyName: !Ref EC2KeyName
+
+
+
+
+#Web Server
+  WebServerGroup2:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2'
+      LaunchConfigurationName: !Ref LaunchConfig2
+      MinSize: !Ref WebAsgMin
+      MaxSize: !Ref WebAsgMax
+      DesiredCapacity: !Ref WebServerCapacity
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup2
+      NotificationConfiguration:
+        TopicARN: !Ref NotificationTopic
+        NotificationTypes:
+          - 'autoscaling:EC2_INSTANCE_LAUNCH'
+          - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+
+
+  WebServerScaleUpPolicy2:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerGroup2
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+
+  WebServerScaleDownPolicy2:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WebServerGroup2
+      Cooldown: '60'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh2:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-up if CPU > 90% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '90'
+      AlarmActions:
+        - !Ref WebServerScaleUpPolicy2
+      Dimensions:
+        - Name: AutoScalingGroupName2
+          Value: !Ref WebServerGroup2
+      ComparisonOperator: GreaterThanThreshold
+
+  CPUAlarmLow2:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-down if CPU < 70% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '70'
+      AlarmActions:
+        - !Ref WebServerScaleDownPolicy2
+      Dimensions:
+        - Name: AutoScalingGroupName2
+          Value: !Ref WebServerGroup2
+      ComparisonOperator: LessThanThreshold
+
+  LaunchConfig2:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      ImageId: !Ref APP2AMIID
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+        - !Ref WebServerSecurityGroup
+      KeyName: !Ref EC2KeyName
+
+
+
+
+
+#SNS Resources
+  NotificationTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperatorEMail
+          Protocol: email
+
+#S3
+  AppBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref BucketName
+      VersioningConfiguration:
+        Status: Suspended
+
+
+  mybucketpolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AppBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: FullAccess
+            Action: 'S3:*'
+            Effect: Allow
+            Resource: 
+              - !Sub "arn:aws:s3:::${AppBucket}"
+              - !Sub "arn:aws:s3:::${AppBucket}/*"
+            Principal:
+              AWS:
+                - !GetAtt CFNUser.Arn    
+  
+  CFNUser:
+    Type: AWS::IAM::User
+    
+
+
+  CFNKeys:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref 'CFNUser'
+#WAF ACL association with ALB 
+
+  #NEWSERVER Resources
+  NSRVInstance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: !Ref NEWSRVAMIID
+      KeyName: !Ref EC2KeyName
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "false"
+          DeviceIndex: "0"
+          GroupSet: 
+          - Ref: "NSRVSecurityGroup"
+          SubnetId: 
+              Fn::ImportValue: 
+                  Fn::Sub: "${VPCStackName}-PrivateSubnet1"
+
+
+
+
+
+
+
+
+
+Outputs:
+
+#ALB
+  URL:
+    Description: Application Load Balancer Endpoint
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - ApplicationLoadBalancer
+          - DNSName
+
+  URL2:
+    Description: Application Load Balancer Endpoint
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - ApplicationLoadBalancer2
+          - DNSName  
+
+
+
+
+
+
+
+ 
+#S3 Bucket and IAM output
+
+  S3Bucket:
+    Value: !Ref AppBucket
+    Description: S3 bucket to use with application 
+
+  AccessKey:
+    Value: !Ref 'CFNKeys'
+    Description: AWSAccessKeyId of new user
+  SecretKey:
+    Value: !GetAtt [CFNKeys, SecretAccessKey]
+    Description: AWSSecretAccessKey of new user   
+
+  WebServerSecurityGroup:
+    Description: A reference to the created VPC
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-WebServerSecurityGroup
+
+

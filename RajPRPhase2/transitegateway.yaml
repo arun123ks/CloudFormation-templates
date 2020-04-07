@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template creates stack based on AWS bestest practice.
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: AWS Environment
+        Parameters:
+          - EnvironmentName
+Parameters:          
+  VPCID:
+    Description: VPCID that will be attach to resource TGW
+    Type: String
+  SUBNETID1:
+    Description: SUBNETIDS that will be attach to resource TGW 
+    Type: String
+  SUBNETID2:
+    Description: SUBNETIDS that will be attach to resource TGW 
+    Type: String
+  SUBNETID3:
+    Description: SUBNETIDS that will be attach to resource TGW 
+    Type: String
+  SUBNETID4:
+    Description: SUBNETIDS that will be attach to resource TGW 
+    Type: String
+  SUBNETID5:
+    Description: SUBNETIDS that will be attach to resource TGW 
+    Type: String
+  SUBNETID6:
+    Description: SUBNETIDS that will be attach to resource TGW 
+    Type: String
+
+Resources:
+  TransitGateway:
+    Type: 'AWS::EC2::TransitGateway'
+    Properties:
+      AmazonSideAsn: 65000
+      Description: TGW Route Integration
+      AutoAcceptSharedAttachments: disable
+      DefaultRouteTableAssociation: disable
+      DnsSupport: enable
+      VpnEcmpSupport: enable
+      Tags:
+        - Key: Application
+          Value: TGW
+  Mainvpcattch:
+    Type: 'AWS::EC2::TransitGatewayAttachment'
+    Properties:
+      SubnetIds: 
+               - !Ref SUBNETID1
+               - !Ref SUBNETID2 
+               - !Ref SUBNETID3
+               - !Ref SUBNETID4
+               - !Ref SUBNETID5
+               - !Ref SUBNETID6
+       
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref VPCID
+
+  Tgwmainroutetable:
+   Type: AWS::EC2::TransitGatewayRouteTable
+   Properties: 
+     TransitGatewayId: !Ref TransitGateway
+
+  Tgwroutetomainvpc:
+   Type: AWS::EC2::TransitGatewayRoute
+   Properties: 
+     Blackhole: false
+     DestinationCidrBlock: 0.0.0.0/0
+     TransitGatewayAttachmentId: !Ref Mainvpcattch
+     TransitGatewayRouteTableId: !Ref Tgwmainroutetable
+  
+  Tgwrtmainvpcassoc:
+   Type: AWS::EC2::TransitGatewayRouteTableAssociation
+   Properties: 
+    TransitGatewayAttachmentId: !Ref Mainvpcattch
+    TransitGatewayRouteTableId: !Ref Tgwmainroutetable
+  
+Outputs:
+  TransitGateway:
+    Description: A reference to the created TGW
+    Value: !Ref TransitGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-TransitGateway'
+
+  Mainvpcattch:
+    Description: A reference to the created TGW
+    Value: !Ref Mainvpcattch
+    Export:
+      Name: !Sub '${AWS::StackName}-Mainvpcattch'
+
+

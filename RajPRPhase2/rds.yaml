@@ -1,0 +1,251 @@
+AWSTemplateFormatVersion: 2010-09-09 
+Description:   
+  This template creates stack based on AWS bestest practice.
+
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+#Environment Label
+      - 
+        Label: 
+          default: "AWS Environment"
+        Parameters: 
+          - EnvironmentName
+
+#RDS Label      
+      - 
+        Label: 
+          default: "Databae Parameters"
+        Parameters:
+          - DatabaseName1
+          - DatabaseUser
+          - DatabasePassword
+          - DatabaseBackupRetentionPeriod
+          - DatabaseAllocatedStorage
+          - DatabaseInstanceClass
+          - MultiAZDatabase
+
+
+
+        
+
+Parameters:
+#Environment Parameters
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+  VPCStackName:
+    Description: The name of the VPC stack that exports the values
+    Type: String  
+
+  SGStackName:
+          Description: The name of the SG stack that exports the values
+          Type: String
+
+#RDS Parameters
+  DatabaseName1:
+    Description:  database name
+    Default: myDatabase
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DatabaseUser:
+    Description: Username for PostgreSQL database access never use admin username here
+    NoEcho: 'true'
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DatabasePassword:
+    Description: Password for PostgreSQL database access
+    NoEcho: 'true'
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+
+  DatabaseBackupRetentionPeriod:
+    ConstraintDescription: Database backup retention period must be between 1 and 35 days
+    Default: '1'
+    Description: The number of days for which automatic DB snapshots are retained
+    MaxValue: '35'
+    MinValue: '1'
+    Type: Number
+
+  DatabaseAllocatedStorage:
+    Description: The size of the database (Gb)
+    Default: '5'
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 5 and 1024Gb.
+
+  DatabaseInstanceClass:
+    Description: The database instance type
+    Type: String
+    Default: db.t3.medium
+    AllowedValues:
+      - db.t3.medium
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4large
+      - db.r5.12xlarge
+      - db.r5.24xlarge
+  
+    ConstraintDescription: must select a valid database instance type.
+
+  MultiAZDatabase:
+    Description: Create a Multi-AZ PostgreSQL Amazon RDS database instance
+    Default: 'false'
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    ConstraintDescription: must be either true or false.
+
+
+
+
+#Mappings 
+
+Resources:
+
+  DataBaseSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Open database for access
+      SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: '5432'
+         ToPort: '5432'
+         SourceSecurityGroupId: 
+                            Fn::ImportValue: !Sub '${SGStackName}-WebServerSecurityGroup' 
+      VpcId: 
+         Fn::ImportValue: !Sub '${VPCStackName}-VPC' 
+
+
+
+
+  DBSecurityGroupIngress:
+      Type: 'AWS::EC2::SecurityGroupIngress'
+      Properties:
+        IpProtocol: tcp
+        FromPort: '5432'
+        ToPort: '5432'
+        SourceSecurityGroupId: !Ref DataBaseSecurityGroup
+        GroupId: !Ref DataBaseSecurityGroup
+      DependsOn: 
+        - DataBaseSecurityGroup     
+
+
+
+
+
+
+
+        
+
+
+
+#RDS Resources
+
+
+
+
+
+
+  DatabaseSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: Subnet Group for RDS Database
+      SubnetIds: 
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnetDB1'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnetDB2'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} Database Subnet Group
+
+  RDSDBClusterParameterGroup: 
+    Type: "AWS::RDS::DBClusterParameterGroup"  
+    Properties: 
+      Description: "A sample parameter group"
+      Family: aurora-postgresql10
+      Parameters: 
+        vacuum_cost_page_miss: 0
+   
+
+  RDSDBParameterGroup: 
+    Type: "AWS::RDS::DBParameterGroup"
+    Properties: 
+      Description: "CloudFormation Sample Parameter Group"
+      Family: aurora-postgresql10
+      Parameters: 
+        apg_plan_mgmt.plan_retention_period: 32
+  
+
+
+  RDSCluster: 
+    Type: 'AWS::RDS::DBCluster'
+    Properties: 
+        DBSubnetGroupName: !Ref DatabaseSubnetGroup
+        Engine: aurora-postgresql
+        MasterUserPassword: !Ref DatabasePassword
+        MasterUsername: !Ref DatabaseUser
+        DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
+        DatabaseName: !Ref DatabaseName1
+        Port: 5432
+        BackupRetentionPeriod: 1
+        VpcSecurityGroupIds: 
+            - !GetAtt 
+               - DataBaseSecurityGroup
+               - GroupId
+
+
+
+  DatabaseInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      Engine: aurora-postgresql
+      MultiAZ: !Ref MultiAZDatabase
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      DBParameterGroupName: !Ref RDSDBParameterGroup
+      DBClusterIdentifier: !Ref RDSCluster
+      PubliclyAccessible: "false"
+      
+
+
+
+
+Outputs:
+
+
+#Database
+  DBEndpoint:
+    Description: PostgreSQL Database Endpoint
+    Value: !Join 
+      - ''
+      - - !GetAtt 
+          - DatabaseInstance
+          - Endpoint.Address
+        - ':5432'
+
+  DBUser:
+    Description: PostgreSQL Datebase Username
+    Value: !Ref DatabaseUser
+
+  DBName:
+    Description: PostgreSQL Database Name
+    Value: !Ref DatabaseName1
+
+ 
+

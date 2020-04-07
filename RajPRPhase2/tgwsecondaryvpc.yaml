@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template creates stack based on AWS bestest practice.
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: AWS Environment
+        Parameters:
+          - EnvironmentName
+Parameters:          
+  VPCStackName:
+    Description: The name of the VPC stack that exports the values
+    Type: String  
+  
+  TGWStackName:
+    Description: The name of the VPC stack that exports the values
+    Type: String
+  
+
+Resources:
+
+  Secvpcattch:
+    Type: 'AWS::EC2::TransitGatewayAttachment'
+    Properties:
+      SubnetIds: 
+               - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1'
+               - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2'    
+      TransitGatewayId: 
+               - Fn::ImportValue: !Sub '${TGWStackName}-TransitGateway'
+      VpcId: 
+           - Fn::ImportValue: !Sub '${VPCStackName}-VPC'      
+           
+
+  Tgwsecroutetable:
+   Type: AWS::EC2::TransitGatewayRouteTable
+   Properties: 
+     TransitGatewayId: 
+                     - Fn::ImportValue: !Sub '${VPCStackName}-TransitGateway'
+
+  
+  Tgwrtsecvpcassoc:
+   Type: AWS::EC2::TransitGatewayRouteTableAssociation
+   Properties: 
+    TransitGatewayAttachmentId: !Ref Secvpcattch
+    TransitGatewayRouteTableId: !Ref Tgwsecroutetable
+
+
+  Tgwrtsecvpcrtprop:
+   Type: AWS::EC2::TransitGatewayRouteTablePropagation
+   Properties: 
+    TransitGatewayAttachmentId: !Ref Secvpcattch
+    TransitGatewayRouteTableId: !Ref Tgwsecroutetable
+
+  SecvpctgwRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: 
+                  - Fn::ImportValue: !Sub '${VPCStackName}-PrivateRouteTable1'
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: 
+               - Fn::ImportValue: !Sub '${TGWStackName}-TransitGateway'
+
+  SecvpctgwRoute1:
+   Type: AWS::EC2::Route
+   Properties:
+     RouteTableId: 
+                 - Fn::ImportValue: !Sub '${VPCStackName}-PrivateRouteTable2'
+     DestinationCidrBlock: 0.0.0.0/0
+     GatewayId: 
+              - Fn::ImportValue: !Sub '${TGWStackName}-TransitGateway'
+               
+  
+Outputs:
+  Secvpcattch:
+    Description: A reference to the created TGW
+    Value: !Ref Secvpcattch
+    Export:
+      Name: !Sub '${AWS::StackName}-Secvpcattch'
+
+
+
+
