@@ -250,15 +250,15 @@ Resources:
       'AWS::CloudFormation::Init':
         configSets:
           wordpress_install:
-            - setup_efs
+            - setup_wps
             - install_cfn
             - install_wordpress
             - rename_wordpressdir
-            - mount_efs
-        setup_efs:
+            - mount_wps
+        setup_wps:
             packages:
               yum:
-               amazon-efs-utils: []
+               amazon-wps-utils: []
 
         
             
@@ -373,7 +373,7 @@ Resources:
                 mv /var/www/html  /var/www/html-old
             02_rename:
               command:  mv /var/www/html-old/wordpress  /var/wp
-        mount_efs:
+        mount_wps:
           commands:
             01_mount:
               command:
